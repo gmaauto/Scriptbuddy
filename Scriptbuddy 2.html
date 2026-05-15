@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Script Buddy">
+<title>Script Buddy</title>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;700&family=DM+Mono:wght@300;400&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:#0d0f12; --surface:#161920; --surface2:#1e2229; --border:#2a2f3a;
+  --gold:#c9a84c; --gold-dim:#7a6030; --text:#e8e3d8; --muted:#6b7280;
+  --green:#2ecc71; --red:#e74c3c; --blue:#4a90d9; --r:14px;
+  --st:env(safe-area-inset-top,20px); --sb:env(safe-area-inset-bottom,20px);
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+html,body{margin:0;padding:0;background:var(--bg);color:var(--text);font-family:'DM Mono',monospace;height:100%;-webkit-font-smoothing:antialiased;}
+.screen{display:none;flex-direction:column;min-height:100vh;min-height:100dvh;padding:var(--st) 20px var(--sb);overflow-y:auto;}
+.screen.active{display:flex;}
+.title{font-family:'Playfair Display',serif;font-size:2rem;font-weight:700;color:var(--gold);text-align:center;margin:0 0 4px;}
+.sub{text-align:center;color:var(--muted);font-size:.7rem;letter-spacing:.12em;text-transform:uppercase;margin:0 0 20px;}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:16px;margin-bottom:12px;}
+.btn{display:block;width:100%;padding:15px;border:none;border-radius:var(--r);font-family:'DM Mono',monospace;font-size:.85rem;letter-spacing:.06em;text-transform:uppercase;cursor:pointer;transition:transform .1s,opacity .1s;margin-bottom:10px;}
+.btn:active{transform:scale(.97);opacity:.85;}
+.btn-gold{background:var(--gold);color:#0d0f12;}
+.btn-outline{background:transparent;border:1px solid var(--border);color:var(--text);}
+.btn-red{background:var(--red);color:#fff;}
+.btn-dim{background:var(--surface2);color:var(--muted);border:1px solid var(--border);}
+.btn-blue{background:var(--blue);color:#fff;}
+.btn:disabled{opacity:.3;pointer-events:none;}
+.drop-zone{border:1.5px dashed var(--gold-dim);border-radius:var(--r);padding:24px 16px;text-align:center;background:var(--surface);margin-bottom:12px;position:relative;}
+.drop-zone input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;}
+textarea{width:100%;min-height:120px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--r);color:var(--text);font-family:'DM Mono',monospace;font-size:.82rem;padding:12px;resize:none;outline:none;margin-bottom:12px;line-height:1.6;}
+textarea::placeholder{color:var(--muted);}
+select{width:100%;padding:13px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:var(--r);color:var(--text);font-family:'DM Mono',monospace;font-size:.85rem;outline:none;appearance:none;margin-bottom:12px;}
+.sel-wrap{position:relative;margin-bottom:12px;}
+.sel-wrap::after{content:'▾';position:absolute;right:12px;top:50%;transform:translateY(-50%);color:var(--gold);pointer-events:none;}
+.fl{font-size:.68rem;color:var(--muted);letter-spacing:.1em;text-transform:uppercase;margin-bottom:6px;display:block;}
+.notice{background:rgba(74,144,217,.1);border:1px solid rgba(74,144,217,.25);border-radius:var(--r);padding:12px 14px;font-size:.73rem;line-height:1.7;color:#7ab8f5;margin-bottom:12px;}
+
+/* Practice */
+#sp{justify-content:space-between;}
+.hdr{display:flex;justify-content:space-between;align-items:center;padding:4px 0 12px;}
+.prog{font-size:.72rem;color:var(–muted);}
+.sc-title{font-family:‘Playfair Display’,serif;font-size:.95rem;color:var(–gold);}
+.tag{display:inline-block;font-size:.68rem;letter-spacing:.12em;text-transform:uppercase;padding:3px 10px;border-radius:20px;border:1px solid currentColor;margin-bottom:8px;}
+.tag.partner{color:var(–blue);}
+.tag.user{color:var(–green);}
+.line-box{background:var(–surface);border:1px solid var(–border);border-radius:var(–r);padding:20px;min-height:100px;flex:1;margin-bottom:12px;display:flex;flex-direction:column;justify-content:center;}
+.line-text{font-family:‘Playfair Display’,serif;font-size:1.25rem;line-height:1.55;color:var(–text);user-select:text;-webkit-user-select:text;}
+.line-text.blur{color:transparent;text-shadow:0 0 14px rgba(200,170,76,.3);user-select:none;-webkit-user-select:none;}
+.sbar{text-align:center;font-size:.75rem;letter-spacing:.1em;text-transform:uppercase;padding:8px 12px;min-height:34px;border-radius:8px;margin-bottom:10px;transition:background .3s,color .3s;}
+.sbar.neutral{background:var(–surface2);color:var(–muted);}
+.sbar.listen{background:rgba(74,144,217,.15);color:var(–blue);}
+.sbar.ok{background:rgba(46,204,113,.15);color:var(–green);}
+.sbar.bad{background:rgba(231,76,60,.15);color:var(–red);}
+.sbar.speak{background:rgba(201,168,76,.12);color:var(–gold);}
+.mic-btn{width:100%;height:65px;border:none;border-radius:14px;font-family:‘DM Mono’,monospace;font-size:.95rem;letter-spacing:.08em;text-transform:uppercase;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;transition:transform .1s,box-shadow .2s;margin-bottom:10px;}
+.mic-btn:active{transform:scale(.97);}
+.mic-btn.ready{background:var(–green);color:#0d0f12;box-shadow:0 0 18px rgba(46,204,113,.25);}
+.mic-btn.going{background:var(–blue);color:#fff;box-shadow:0 0 22px rgba(74,144,217,.45);animation:pulse 1.1s ease-in-out infinite;}
+.mic-btn:disabled{background:var(–surface2);color:var(–muted);box-shadow:none;}
+@keyframes pulse{0%,100%{box-shadow:0 0 22px rgba(74,144,217,.3);}50%{box-shadow:0 0 40px rgba(74,144,217,.65);}}
+
+/* End */
+.ring{width:110px;height:110px;margin:16px auto;border-radius:50%;border:4px solid var(–gold);display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:‘Playfair Display’,serif;}
+.rnum{font-size:2.2rem;color:var(–gold);line-height:1;}
+.rdenom{font-size:.7rem;color:var(–muted);margin-top:2px;}
+.stat-row{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(–border);font-size:.78rem;}
+.stat-row:last-child{border-bottom:none;}
+.sl{color:var(–muted);text-transform:uppercase;letter-spacing:.07em;}
+
+/* Toast */
+.toast{position:fixed;bottom:calc(var(–sb) + 70px);left:50%;transform:translateX(-50%) translateY(16px);background:var(–surface2);border:1px solid var(–border);border-radius:30px;padding:9px 18px;font-size:.78rem;color:var(–text);opacity:0;transition:opacity .3s,transform .3s;pointer-events:none;white-space:nowrap;z-index:99;}
+.toast.show{opacity:1;transform:translateX(-50%) translateY(0);}
+
+/* Mic help overlay */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.88);z-index:200;display:flex;align-items:center;justify-content:center;padding:24px;}
+.overlay-card{background:var(–surface);border:1px solid var(–border);border-radius:16px;padding:24px;max-width:340px;width:100%;}
+</style>
+
+</head>
+<body>
+
+<!-- SCREEN 1: LOAD -->
+
+<div id="sl" class="screen active">
+  <div style="padding-top:10px;">
+    <div class="title">Script Buddy</div>
+    <div class="sub">Line rehearsal companion</div>
+  </div>
+  <div class="notice">
+    <b>📱 Mic requires Safari + HTTPS.</b> If mic is blocked, use <b>Peek</b> to read your line and tap <b>Mark as Done</b> to advance manually. Partner lines are tap-to-advance — no audio needed.
+  </div>
+  <div class="drop-zone">
+    <input type="file" id="fileInput" accept=".txt,.text" onchange="handleFile(this)">
+    <div style="font-size:2rem;margin-bottom:6px;">📄</div>
+    <div style="color:var(--gold);font-size:.82rem;letter-spacing:.08em;text-transform:uppercase;">Load from Files</div>
+    <div style="color:var(--muted);font-size:.68rem;margin-top:3px;">Tap to choose a .txt script</div>
+  </div>
+  <div style="text-align:center;color:var(--muted);font-size:.68rem;letter-spacing:.1em;margin:4px 0 8px;">— or paste below —</div>
+  <textarea id="scriptInput" placeholder="WM: Has it a name?&#10;EA: It has.&#10;WM: Will you give it to me?&#10;EA: I will letter it and halve it with you."></textarea>
+  <div class="card" style="font-size:.7rem;color:var(--muted);line-height:1.7;margin-bottom:14px;">
+    <b style="color:var(--gold-dim);">Format</b> — NAME: dialogue text<br>Two or more characters required.
+  </div>
+  <button class="btn btn-gold" onclick="processScript()">Analyse Script →</button>
+  <div style="height:8px;"></div>
+</div>
+
+<!-- SCREEN 2: CAST -->
+
+<div id="sc" class="screen">
+  <div style="padding-top:10px;">
+    <div class="title">Cast</div>
+    <div class="sub">Assign the two main roles</div>
+  </div>
+  <div class="card">
+    <span class="fl">Speaker 1</span>
+    <div class="sel-wrap"><select id="s1"></select></div>
+    <span class="fl">Speaker 2</span>
+    <div class="sel-wrap"><select id="s2"></select></div>
+  </div>
+  <div id="prev" class="card" style="font-size:.78rem;line-height:1.9;max-height:180px;overflow-y:auto;"></div>
+  <button class="btn btn-gold" onclick="confirmCast()">Confirm Cast →</button>
+  <button class="btn btn-outline" onclick="goTo('sl')">← Back</button>
+  <div style="height:8px;"></div>
+</div>
+
+<!-- SCREEN 3: ROLE -->
+
+<div id="sr" class="screen">
+  <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;">
+    <div class="title" style="margin-bottom:4px;">Your Role</div>
+    <div class="sub">Which character are you?</div>
+    <div style="width:100%;">
+      <div class="sel-wrap"><select id="uChoice"></select></div>
+      <button class="btn btn-gold" onclick="beginRehearsal()">Begin Rehearsal →</button>
+      <button class="btn btn-outline" onclick="goTo('sc')">← Back</button>
+    </div>
+  </div>
+</div>
+
+<!-- SCREEN 4: PRACTICE -->
+
+<div id="sp" class="screen">
+  <div class="hdr">
+    <span class="prog" id="prog">Line 1 of ?</span>
+    <span class="sc-title" id="scTitle">Rehearsal</span>
+  </div>
+
+  <div class="line-box">
+    <span class="tag" id="tag">—</span>
+    <div class="line-text blur" id="lt">…</div>
+  </div>
+
+  <div class="sbar neutral" id="statusBar">Ready</div>
+
+  <!-- Partner turn -->
+
+  <div id="partnerCtrl" style="display:none;">
+    <button class="btn btn-blue" onclick="partnerDone()">▶ Done — tap to continue</button>
+  </div>
+
+  <!-- User turn -->
+
+  <div id="userCtrl" style="display:none;">
+    <button class="mic-btn ready" id="micBtn" onclick="startListening()">
+      <span id="mIcon">🎤</span><span id="mLabel">Tap to Speak</span>
+    </button>
+    <button class="btn btn-dim" id="peekBtn" onclick="togglePeek()">👁 Peek at line</button>
+    <button class="btn btn-dim" id="nextBtn" onclick="skipUserLine()" style="display:none;">✓ Mark as done &amp; continue</button>
+  </div>
+
+<button class="btn btn-red" onclick="confirmAbort()" style="margin-top:4px;margin-bottom:0;">End Scene</button>
+
+</div>
+
+<!-- SCREEN 5: END -->
+
+<div id="se" class="screen">
+  <div style="padding-top:12px;">
+    <div class="title">Scene Complete</div>
+    <div class="sub">Here's how you did</div>
+  </div>
+  <div class="ring">
+    <div class="rnum" id="eScore">0</div>
+    <div class="rdenom" id="eDenom">/ 0 lines</div>
+  </div>
+  <div class="card" id="eStats"></div>
+  <div id="eMsg" style="text-align:center;font-family:'Playfair Display',serif;font-size:1.05rem;color:var(--gold);margin-bottom:18px;"></div>
+  <button class="btn btn-gold" onclick="playAgain()">Try Again →</button>
+  <button class="btn btn-outline" onclick="goTo('sl')">Load New Script</button>
+  <div style="height:8px;"></div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ── State ──
+let lines=[], sp1='', sp2='', userNum=1;
+let idx=0, correct=0, totalUser=0, wrongs=0;
+let running=false, listening=false;
+const SpeechRec=window.SpeechRecognition||window.webkitSpeechRecognition;
+let rec=null;
+
+// ── Nav ──
+function goTo(id){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+// ── Toast ──
+function toast(msg,d=2500){
+  const t=document.getElementById('toast');
+  t.textContent=msg; t.classList.add('show');
+  setTimeout(()=>t.classList.remove('show'),d);
+}
+
+// ── File loader ──
+function handleFile(inp){
+  const f=inp.files[0]; if(!f) return;
+  const r=new FileReader();
+  r.onload=e=>{
+    document.getElementById('scriptInput').value=e.target.result;
+    toast('Loaded: '+f.name);
+    setTimeout(processScript,300);
+  };
+  r.readAsText(f);
+}
+
+// ── Step 1: Parse ──
+function processScript(){
+  const txt=document.getElementById('scriptInput').value.trim();
+  if(!txt){toast('Please paste or load a script');return;}
+  const names=new Set();
+  txt.split('\n').forEach(l=>{const m=l.match(/^([^:]+):/);if(m)names.add(m[1].trim());});
+  if(names.size<2){toast('Need at least 2 characters (Name: line)');return;}
+  const arr=[...names];
+  const s1=document.getElementById('s1'),s2=document.getElementById('s2');
+  s1.innerHTML=''; s2.innerHTML='';
+  arr.forEach((n,i)=>{
+    s1.innerHTML+=`<option value="${n}">${n}</option>`;
+    s2.innerHTML+=`<option value="${n}"${i===1?' selected':''}>${n}</option>`;
+  });
+  updatePrev();
+  s1.onchange=updatePrev; s2.onchange=updatePrev;
+  goTo('sc');
+}
+
+function updatePrev(){
+  const a=document.getElementById('s1').value,b=document.getElementById('s2').value;
+  const raw=document.getElementById('scriptInput').value.trim().split('\n');
+  let h='';
+  raw.slice(0,14).forEach(l=>{
+    const m=l.match(/^([^:]+):(.*)/);if(!m)return;
+    const n=m[1].trim(),t=m[2].trim();
+    if(n===a) h+=`<span style="color:var(--blue)">${n}:</span> ${t}<br>`;
+    else if(n===b) h+=`<span style="color:var(--green)">${n}:</span> ${t}<br>`;
+    else h+=`<span style="color:var(--muted)">${n}:</span> ${t}<br>`;
+  });
+  if(raw.length>14) h+=`<span style="color:var(--muted)">…${raw.length-14} more lines</span>`;
+  document.getElementById('prev').innerHTML=h;
+}
+
+// ── Step 2: Cast ──
+function confirmCast(){
+  sp1=document.getElementById('s1').value; sp2=document.getElementById('s2').value;
+  if(sp1===sp2){toast('Pick two different characters');return;}
+  lines=[];
+  document.getElementById('scriptInput').value.split('\n').forEach(l=>{
+    const m=l.match(/^([^:]+):(.*)/);if(!m)return;
+    const n=m[1].trim(),t=m[2].trim();if(!t)return;
+    let num=0;
+    if(n===sp1)num=1; else if(n===sp2)num=2;
+    if(num) lines.push({num,name:n,text:t});
+  });
+  if(!lines.length){toast('No dialogue found for those characters');return;}
+  const u=document.getElementById('uChoice');
+  u.innerHTML=`<option value="1">${sp1}</option><option value="2">${sp2}</option>`;
+  goTo('sr');
+}
+
+// ── Step 3: Begin ──
+function beginRehearsal(){
+  userNum=parseInt(document.getElementById('uChoice').value);
+  idx=0; correct=0; wrongs=0;
+  totalUser=lines.filter(l=>l.num===userNum).length;
+  running=true;
+  document.getElementById('scTitle').textContent=sp1+' & '+sp2;
+  goTo('sp');
+  setTimeout(runLine,300);
+}
+
+// ── Core: run current line ──
+function runLine(){
+  if(!running)return;
+  if(idx>=lines.length){endScene();return;}
+  const line=lines[idx];
+
+  document.getElementById('prog').textContent=`Line ${idx+1} of ${lines.length}`;
+  const tag=document.getElementById('tag');
+  tag.textContent=line.name;
+  tag.className='tag '+(line.num===userNum?'user':'partner');
+
+  if(line.num!==userNum){
+    // Partner's line — show it, wait for tap
+    document.getElementById('lt').textContent=line.text;
+    document.getElementById('lt').className='line-text'; // fully visible & selectable
+    setStatus('speak','🎭 Partner\'s line — read it, then tap ▶');
+    document.getElementById('partnerCtrl').style.display='block';
+    document.getElementById('userCtrl').style.display='none';
+  } else {
+    // User's line — blurred until peeked
+    document.getElementById('lt').textContent=line.text;
+    document.getElementById('lt').className='line-text blur';
+    setStatus('neutral','Your line — tap mic when ready');
+    document.getElementById('partnerCtrl').style.display='none';
+    document.getElementById('userCtrl').style.display='block';
+    document.getElementById('peekBtn').textContent='👁 Peek at line';
+    document.getElementById('nextBtn').style.display='none';
+    resetMic();
+  }
+}
+
+// Partner done — advance
+function partnerDone(){
+  document.getElementById('partnerCtrl').style.display='none';
+  idx++;
+  setTimeout(runLine,200);
+}
+
+// ── Peek ──
+function togglePeek(){
+  const el=document.getElementById('lt');
+  const btn=document.getElementById('peekBtn');
+  const nxt=document.getElementById('nextBtn');
+  if(el.classList.contains('blur')){
+    // Reveal — text becomes selectable
+    el.className='line-text';
+    btn.textContent='🙈 Hide line';
+    nxt.style.display='block'; // show manual advance option
+  } else {
+    el.className='line-text blur';
+    btn.textContent='👁 Peek at line';
+    // keep nextBtn visible once shown
+  }
+}
+
+// Manual advance after peek (no correct credit)
+function skipUserLine(){
+  document.getElementById('lt').className='line-text blur';
+  document.getElementById('nextBtn').style.display='none';
+  idx++;
+  setTimeout(runLine,200);
+}
+
+// ── Mic / Speech ──
+function startListening(){
+  if(!running||listening)return;
+  if(!SpeechRec){
+    showMicHelp('no-api');
+    return;
+  }
+  try{
+    if(rec){try{rec.abort();}catch(e){}}
+    rec=new SpeechRec();
+    rec.lang='en-US'; rec.continuous=false; rec.interimResults=false; rec.maxAlternatives=4;
+
+    rec.onstart=()=>{
+      listening=true;
+      const b=document.getElementById('micBtn');
+      b.className='mic-btn going'; b.disabled=false;
+      document.getElementById('mIcon').textContent='🔴';
+      document.getElementById('mLabel').textContent='Listening…';
+      setStatus('listen','🎙 Listening — speak your line…');
+    };
+
+    rec.onresult=e=>{
+      listening=false; resetMic();
+      const candidates=[];
+      for(let i=0;i<e.results[0].length;i++)
+        candidates.push(e.results[0][i].transcript.toLowerCase().replace(/[^\w\s]/g,'').trim());
+      const target=lines[idx].text.toLowerCase().replace(/[^\w\s]/g,'').trim();
+      if(candidates.some(c=>similar(c,target))) handleCorrect();
+      else handleWrong(candidates[0]||'');
+    };
+
+    rec.onerror=e=>{
+      listening=false; resetMic();
+      if(e.error==='not-allowed'||e.error==='service-not-allowed'){
+        showMicHelp('blocked');
+      } else if(e.error==='no-speech'){
+        setStatus('neutral','Nothing heard — tap mic to try again');
+      } else {
+        setStatus('neutral','Mic error ('+e.error+') — tap to retry');
+      }
+    };
+
+    rec.onend=()=>{listening=false; resetMic();};
+    rec.start();
+  } catch(err){
+    listening=false; resetMic();
+    toast('Could not start mic — tap again');
+  }
+}
+
+function showMicHelp(reason){
+  const existing=document.getElementById('micOverlay');
+  if(existing)existing.remove();
+  const title=reason==='blocked'?'Microphone Blocked':'Mic Not Available';
+  const body=reason==='blocked'
+    ?`To allow mic on iPhone:<br><br>
+      <b style="color:var(--gold-dim)">If opened via Safari URL (recommended):</b><br>
+      Settings → Safari → Microphone → Allow<br><br>
+      <b style="color:var(--gold-dim)">If opened from Files (local file):</b><br>
+      Local files cannot access the mic on iOS — save this page to a web host or use Claude's artifact viewer.<br><br>
+      <b style="color:var(--gold-dim)">No mic? Use manual mode:</b><br>
+      Tap <b>Peek</b> to see your line, then <b>Mark as Done</b> to advance.`
+    :`Speech recognition is not available in this browser.<br><br>Use <b>Safari</b> on iPhone for mic support, or use <b>Peek → Mark as Done</b> to advance manually.`;
+
+  const d=document.createElement('div');
+  d.id='micOverlay'; d.className='overlay';
+  d.innerHTML=`<div class="overlay-card">
+    <div style="font-family:'Playfair Display',serif;font-size:1.15rem;color:var(--gold);margin-bottom:12px;">${title}</div>
+    <div style="font-size:.78rem;line-height:1.85;color:var(--text);">${body}</div>
+    <button class="btn btn-gold" style="margin-top:16px;" onclick="document.getElementById('micOverlay').remove()">Got it</button>
+  </div>`;
+  document.body.appendChild(d);
+}
+
+function similar(spoken,target){
+  if(spoken===target)return true;
+  if(spoken.includes(target)||target.includes(spoken))return true;
+  const tw=target.split(' ').filter(Boolean);
+  const sw=new Set(spoken.split(' ').filter(Boolean));
+  return tw.length>0 && tw.filter(w=>sw.has(w)).length/tw.length>=0.65;
+}
+
+function resetMic(){
+  const b=document.getElementById('micBtn');
+  if(!b)return;
+  b.className='mic-btn ready'; b.disabled=false;
+  document.getElementById('mIcon').textContent='🎤';
+  document.getElementById('mLabel').textContent='Tap to Speak';
+}
+
+function handleCorrect(){
+  correct++;
+  setStatus('ok','✓ Correct!');
+  document.getElementById('lt').className='line-text';
+  idx++;
+  setTimeout(runLine,1000);
+}
+
+function handleWrong(heard){
+  wrongs++;
+  setStatus('bad','✗ Try again');
+  // Flash line visible for 2.5s then re-blur
+  document.getElementById('lt').className='line-text';
+  document.getElementById('nextBtn').style.display='block'; // let them skip if frustrated
+  setTimeout(()=>{
+    if(lines[idx]&&lines[idx].num===userNum)
+      document.getElementById('lt').className='line-text blur';
+  },2500);
+  setTimeout(()=>{ setStatus('neutral','Tap mic to try again'); resetMic(); },2600);
+}
+
+function setStatus(cls,msg){
+  const el=document.getElementById('statusBar');
+  el.className='sbar '+cls; el.textContent=msg;
+}
+
+function confirmAbort(){
+  if(confirm('End the scene now?')){
+    running=false;
+    if(rec)try{rec.abort();}catch(e){}
+    endScene();
+  }
+}
+
+// ── End scene ──
+function endScene(){
+  running=false;
+  if(rec)try{rec.abort();}catch(e){}
+  const reached=lines.slice(0,idx).filter(l=>l.num===userNum).length;
+  const pct=reached?Math.round(correct/reached*100):0;
+  document.getElementById('eScore').textContent=correct;
+  document.getElementById('eDenom').textContent='/ '+totalUser+' lines';
+  const msg=pct===100?'"Perfect performance!"':pct>=80?'"Nearly there — great work!"':pct>=50?'"Keep at it!"':'"Practice makes perfect!"';
+  document.getElementById('eMsg').textContent=msg;
+  document.getElementById('eStats').innerHTML=`
+    <div class="stat-row"><span class="sl">Your character</span><span>${lines.find(l=>l.num===userNum)?.name||'—'}</span></div>
+    <div class="stat-row"><span class="sl">Lines correct (mic)</span><span>${correct} / ${reached}</span></div>
+    <div class="stat-row"><span class="sl">Wrong attempts</span><span>${wrongs}</span></div>
+    <div class="stat-row"><span class="sl">Accuracy</span><span>${pct}%</span></div>`;
+  goTo('se');
+}
+
+function playAgain(){
+  idx=0; correct=0; wrongs=0; running=true;
+  goTo('sp');
+  setTimeout(runLine,300);
+}
+
+// Stop iOS rubber-band scroll on practice screen
+document.addEventListener('touchmove',e=>{
+  if(!e.target.closest('textarea,select,#prev,.screen'))e.preventDefault();
+},{passive:false});
+</script>
+
+</body>
+</html>
