@@ -1,0 +1,191 @@
+# Vision Impaired Golf Ball Tracker (VIGBT) — Master Technical & Commercial Specification
+
+## 1. Executive Summary & Product Vision
+
+VIGBT is an accessible, on-device iOS app for visually impaired and low-vision golfers. A tripod-mounted,
+LiDAR-equipped iPhone at the tee box captures the swing at high frame rate, isolates the ball's launch vector
+with computer vision, predicts the landing zone with an aerodynamic ballistic physics engine, and guides the
+golfer to the ball with spatial audio and haptics.
+
+**Core architectural principles**
+
+- **100% on-device edge processing.** No cloud servers or recurring API costs. Video processing, Vision
+  tracking, physics and spatial audio run locally, so the app works offline on the course and keeps all
+  App Store net revenue.
+- **Launch-to-physics hand-off.** Pixel-tracking a ball 200+ yards downrange from a ground-level tripod is
+  optically infeasible. The CV pipeline tracks only the first 15–25 ft off the clubface (10–20 frames at
+  120 fps) to extract ball speed `v0`, vertical launch angle `θ` and horizontal azimuth `φ`, then hands them
+  to a ballistic solver.
+- **Accessibility first.** Every screen, alert and feedback loop is built around VoiceOver, high-contrast
+  readouts and tactile feedback.
+
+## 2. Commercial & App Store Architecture
+
+### 2.1 Monetization (StoreKit 2)
+
+- **Model:** paid upfront ($14.99–$19.99) *or* freemium with one non-consumable lifetime unlock
+  `com.vigbt.pro.unlock`.
+- **Free / trial tier:** 120 fps swing capture and slow-motion replay, 3 shots per day.
+- **Pro tier:** unlimited shots, ballistic range & dispersion, GPS/spatial-audio walk-to-ball, haptic homing.
+- **Receipt validation:** on-device via `Transaction.currentEntitlements` (StoreKit 2 JWS verification); no
+  receipt server.
+
+### 2.2 App Store review & hardware compliance
+
+- **Info.plist:** `NSCameraUsageDescription` (tee capture, ground scan), `NSMicrophoneUsageDescription`
+  (impact detection), `NSLocationWhenInUseUsageDescription` (walk-to-ball navigation).
+- **Thermal & battery:** release `CMSampleBuffer`s immediately after the trigger and stop the
+  `AVCaptureSession` while the golfer walks.
+- **Safety disclaimer:** onboarding acknowledgment that VIGBT is a navigational aid, not a hazard or collision
+  avoidance system.
+
+## 3. Target Hardware & Tech Stack
+
+- **Hardware:** LiDAR iPhones (iPhone 12 Pro or newer).
+- **OS:** iOS 17.0+, Swift 5.9+, SwiftUI.
+- **Frameworks:** AVFoundation (1080p120 Ultra-Wide capture, pre-roll buffer, audio metering), ARKit (ground
+  plane, `D_tee`), Vision + Accelerate (vImage HSV threshold, `VNDetectContoursRequest`, optical flow),
+  CoreLocation + CoreMotion (GPS, true-north heading, pedometer), AVFAudio (`AVAudioEnvironmentNode`),
+  StoreKit 2.
+
+## 4. Phased Engineering Roadmap
+
+### Phase 1 — MVP: capture, hybrid CV tracking, annotated replay
+
+1. **Rolling pre-roll and acoustic trigger.** Keep 5.0 s of 1920×1080 @ 120 fps from `builtInUltraWideCamera`.
+   Detect the club–ball transient (`T0`) on `AVAudioEngine` input; provide a manual **Test Strike** button.
+   Save `[T0 − 1.5 s, T0 + 3.5 s]` to a temporary `.mov`, then pause capture.
+2. **LiDAR tee calibration.** A short `ARWorldTrackingConfiguration` pass measures `D_tee` and camera pitch to
+   the tee ground plane, giving metric scale at the tee (`m/px = D_tee / f`).
+3. **Hybrid detection.** Preset HSV masks (Neon Orange, Neon Pink); tap-to-sample override (15×15 patch);
+   color-agnostic motion + circularity gate (`0.7 ≤ aspect ≤ 1.3`) along a consistent kinematic vector.
+   `Score = w1·Kinematics + w2·Circularity + w3·ColorMatch`.
+4. **Annotated replay.** 0.25× loop, SwiftUI `Canvas` tracer spline through validated centroids, freeze on the
+   exit vector with a VoiceOver launch readout.
+
+### Phase 2 — Ballistics & landing zone
+
+1. **Vector extraction (frames `T0+1 … T0+12`, `Δt = 1/120 s`):** `v0` (m/s, read out in mph), `θ` corrected
+   for camera tilt via the `CMMotionManager` gravity vector, `φ` relative to the camera's true-north heading
+   `ψ_camera`.
+2. **3D trajectory solver:** RK4, `Δt = 0.01 s`, gravity + drag + Magnus lift:
+
+   `a = −g·ẑ − k·C_d·v_rel + k·C_l·(ω̂ × v_rel)`, with `k = ρ·A·|v_rel| / (2m)` and `v_rel = v − wind`.
+
+   - **Spin heuristic:** `ω ≈ 2200 + 140·θ_deg` rpm, clamped to [2000, 8500].
+   - **Dispersion:** primary landing point `(X_carry, Y_lateral)` plus `R_search ≈ 0.08·X_carry`
+     (±12 yd at 150 yd).
+3. **Geospatial projection:** project carry and bearing `ψ_camera + φ` from the tee `CLLocation` to WGS84
+   (`TargetCoordinate`).
+
+### Phase 3 — Walk-to-ball navigation & spatial audio
+
+1. **Navigation engine:** distance remaining `d_rem` and heading error `Δψ = ψ_target − ψ_user`; GPS smoothed
+   with a Kalman filter fused with pedometer steps.
+2. **3D audio beacon (`AVAudioEnvironmentNode`):** on-line → centred sonar pulse whose tempo rises as `d_rem`
+   falls; off-line (`|Δψ| > 15°`) → beacon pans left/right with a pitch shift; VoiceOver callouts at 100, 50,
+   25 yd and "Arrived at search zone" at `d_rem ≤ 10 yd`.
+
+### Phase 4 — Close-range visual & haptic homing
+
+1. **Search mode:** auto at `d_rem ≤ 10 yd` or via **Scan Ground**; rear Wide camera at 1080p60, continuous AF,
+   torch in low light.
+2. **Ground scanner:** HSV mask from the active ball profile + circular contours tuned for grass.
+3. **Haptics:** double-tap when the ball enters view; Geiger ticks that speed up as the ball is centred;
+   confirmation tone + `.success` when centred within 2 m.
+
+## 5. Data Models (Core Swift Contracts)
+
+All contracts live in the `VIGBTCore` Swift package (`VIGBT/Sources/VIGBTCore`). The package is
+Foundation-only (no AVFoundation, ARKit, Vision or CoreLocation imports), so every algorithm is unit-testable
+on macOS, the iOS Simulator and Linux CI. The iOS app layer adapts framework types at the boundary, for example
+`CLLocationCoordinate2D ↔ GeoCoordinate` and `VNContoursObservation → DetectionCandidate`.
+
+### 5.1 Coordinate conventions
+
+| Space | Axes | Notes |
+|---|---|---|
+| Image | +x right, +y down, origin top-left, pixels | Vision normalized coords must be flipped (`1 − y`) and scaled. |
+| Camera | +x right, +y down, +z along optical axis | Pinhole, `f = (W/2) / tan(hFOV/2)`. |
+| Physics world | +x downrange (camera heading), +y **left**, +z up | Right-handed. Public APIs report lateral offsets as **positive = right**. |
+| Geo | WGS84 lat/lon, true-north bearings in [0, 360) | Spherical earth (error is centimetres at golf distances). |
+
+### 5.2 Contracts
+
+| Type | Purpose | Key fields |
+|---|---|---|
+| `TeeCalibration` | Phase 1.2 output | `distanceToTeeMeters` (optical-axis depth), `cameraPitchRadians`, `cameraRollRadians`, `cameraHeadingDeg`, `horizontalFOVRadians`, `imageWidth/Height`, `teeLocation`; derived `focalLengthPixels`, `metersPerPixelAtTee` |
+| `HSV`, `HSVRange` | Color masks | Hue in degrees; ranges may wrap through 0° |
+| `BallColorProfile` | Active ball color (Phases 1 and 4) | `.neonOrange`, `.neonPink`, `.sampled(from:)` (circular-mean hue ± tolerance) |
+| `DetectionCandidate` | One contour blob per frame | centre, bbox, `colorMatchFraction`; derived `aspectRatio`, `radiusPixels` |
+| `TrackedCentroid` | Validated ball position | `frameOffset` (T0+n), `x`, `y`, `radiusPixels`, `score` |
+| `LaunchVector` | Phase 2.1 output | `ballSpeed` (m/s), `launchAngleDeg`, `azimuthDeg` (+ = right); `ballSpeedMph`, `initialVelocity` |
+| `SpinEstimate` | Spin input | `rpm`, `axisTiltDeg` (+ = fade/slice) |
+| `TrajectorySolution` | Solver output | `samples`, `carryMeters`, `lateralMeters`, `apexMeters`, `flightTimeSeconds`, `landingSpeed`, `landingAngleDeg` |
+| `LandingEstimate` | Phase 2 result | carry, lateral, `searchRadiusMeters`, `target` |
+| `TargetCoordinate` | Phase 2 → 3 hand-off | `coordinate`, `bearingFromTeeDeg`, `distanceFromTeeMeters`, `searchRadiusMeters` |
+| `ShotRecord` | Persisted shot (Codable) | id, timestamp, profile, calibration, centroids, launch, spin, trajectory, landing, `clipFileName` |
+| `ShotPhase` | App state machine | `setup → armed → processing → replay → navigating → homing → found` |
+| `NavigationGuidance` | Phase 3 tick | `distanceRemainingMeters`, `headingErrorDeg`, `alignment`, `pulseIntervalSeconds`, `beaconRight/Forward`, `pitchShiftCents`, `milestones`, `hasArrived` |
+| `GroundDetection`, `HomingEvent` | Phase 4 I/O | normalized centre offset + depth → `.peripheralDetected`, `.tick`, `.lost`, `.locked` |
+| `EntitlementTier`, `Feature`, `ShotQuota` | Section 2.1 gating | free-tier daily counter (3/day), feature matrix |
+
+### 5.3 Services (pure logic, in `VIGBTCore`)
+
+| Service | Spec section |
+|---|---|
+| `ImpactDetector`: adaptive noise floor, +24 dB threshold, −20 dBFS absolute floor, 2 s refractory, `forceTrigger` for Test Strike | 4 / Phase 1.1 |
+| `RingBuffer<T>`, `ClipWindow`, `RingBufferBudget` | Phase 1.1 |
+| `FusionScorer`, `BallTracker` (constant-velocity gated association) | Phase 1.3 |
+| `LaunchVectorExtractor` (pinhole back-projection, gravity levelling, per-axis least squares) | Phase 2.1 |
+| `SpinEstimator`, `AerodynamicModel`, `BallisticSolver` (3D RK4), `LandingZoneEstimator` | Phase 2.2 |
+| `GeoMath` (destination, haversine, bearing, ENU) | Phase 2.3 |
+| `PositionKalmanFilter`, `NavigationEngine` | Phase 3 |
+| `HomingController` | Phase 4 |
+| `EntitlementGate` | Section 2.1 |
+
+## 6. Engineering Review Notes (decisions and corrections to the original draft)
+
+1. **The pre-roll cannot hold raw frames.** 5 s × 120 fps = 600 frames. At ~3.1 MB per 1080p NV12 frame,
+   that is ~1.9 GB, which iOS will terminate for memory. Encode the pre-roll continuously to HEVC instead
+   (`AVAssetWriter` writing ~1 s rolling segments, or `VTCompressionSession` packets in the `RingBuffer`),
+   which is about 37 MB at 60 Mbps. Decode only the 12–20 frames after `T0` for CV. `RingBufferBudget`
+   encodes this check.
+2. **3D launch from one camera.** A single 2D view cannot measure motion toward or away from the lens. The
+   extractor recovers depth per frame from the ball's apparent size, anchored to LiDAR:
+   `Z_i = D_tee · r_tee / r_i`. All three velocity components are therefore measured whether the tripod is
+   face-on or down-the-line, and `φ` is reported relative to `ψ_camera` as specified. For the noise budget,
+   prefer down-the-line placement (behind the golfer), where `φ` comes mostly from the image x-axis and size
+   only affects speed. The ball is only about 6–12 px wide at 3 m on the Ultra-Wide, so sub-pixel ellipse
+   fitting on the contour is required.
+3. **Spin heuristic accuracy.** `2200 + 140·θ` matches drivers (about 3.7k rpm at 11°) but underestimates
+   irons. A tour 7-iron at 16° gives about 4.4k rpm against a real ~7k. Low spin flies longer, so iron carry
+   reads long by about 10–15%. The 8% search radius partly absorbs this. A club-selection control (driver /
+   wood / iron / wedge → spin table) is a cheap upgrade and is supported through the optional
+   `SpinEstimate` parameter.
+4. **Aerodynamic coefficients.** `C_d = 0.18 + 0.30·S`, `C_l = min(0.25, 0.08 + 0.60·S)`, `S = rω/|v|`,
+   with spin decay time constant τ = 25 s. Fitted against PGA Tour TrackMan averages, the model gives driver
+   272 yd (tour 275), 7-iron 173 (172), PW 130 (136) and 3-wood 253 (243).
+   `AerodynamicModel.airDensity(...)` supports temperature, pressure and humidity correction.
+5. **Camera tilt.** Pitch and roll come from the gravity vector at calibration time. The extractor removes
+   both before computing `θ`, and subtracts the ½gt² drop over the fit window, so the fitted `v_z` is the
+   launch value at `T0`.
+6. **Milestone hygiene.** `NavigationEngine.begin(from:)` suppresses callouts the golfer is already inside
+   (no "100 yards" on a 40-yard chip). If one GPS jump crosses several milestones, only the nearest is
+   spoken.
+7. **Homing lock debounce.** `.locked` requires 6 consecutive centred frames within 2 m (LiDAR depth at the
+   centroid), which rejects single-frame false positives such as divots and leaves.
+
+## 7. Remaining iOS integration work (not in `VIGBTCore`)
+
+- `CaptureService`: `AVCaptureSession` with Ultra-Wide 1080p120, HEVC rolling segments, `AVAudioEngine` tap
+  → `ImpactDetector`, export of `ClipWindow`, then stop the session.
+- `CalibrationService`: ARKit raycast to the tee and the ground plane → `TeeCalibration`; CoreMotion gravity
+  for pitch and roll; heading from `CLLocationManager.heading.trueHeading`.
+- `DetectionService`: vImage RGB→HSV + mask, frame differencing, `VNDetectContoursRequest` →
+  `[DetectionCandidate]`.
+- `ReplayView`: `AVPlayer` at 0.25× rate with a `Canvas` overlay of `TrackedCentroid`s.
+- `AudioBeaconService`: `AVAudioEnvironmentNode` + `AVAudioUnitTimePitch`, driven by `NavigationGuidance`.
+- `HapticsService`: CoreHaptics patterns for each `HomingEvent`.
+- `StoreService`: StoreKit 2 `Product.products`, `purchase()`, `Transaction.updates` and
+  `currentEntitlements` → `EntitlementTier`.

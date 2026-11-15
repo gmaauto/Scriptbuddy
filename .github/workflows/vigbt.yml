@@ -1,0 +1,28 @@
+name: VIGBT Core
+
+on:
+  push:
+    paths: ["VIGBT/**", ".github/workflows/vigbt.yml"]
+  pull_request:
+    paths: ["VIGBT/**", ".github/workflows/vigbt.yml"]
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    container: swift:5.10
+    defaults:
+      run:
+        working-directory: VIGBT
+    steps:
+      - uses: actions/checkout@v4
+      - run: swift build
+      - run: swift test
+
+  macos:
+    runs-on: macos-14
+    defaults:
+      run:
+        working-directory: VIGBT
+    steps:
+      - uses: actions/checkout@v4
+      - run: swift test
