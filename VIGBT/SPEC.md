@@ -343,7 +343,7 @@ Everything that makes up VIGBT must be open source or open data.
 
 | Part | Requirement | Current status |
 |---|---|---|
-| **VIGBT source code** (core, app, tests, tools) | Published under an OSI-approved licence. Recommended: **Apache-2.0**, which is compatible with App Store distribution and grants patent rights. MIT would also work. Avoid GPL/AGPL: the App Store terms conflict with them, and the FSF has had GPL apps removed for this reason. | **Licence not chosen yet. A `LICENSE` file is still needed.** |
+| **VIGBT source code** (core, app, tests, tools) | Published under an OSI-approved licence. Recommended: **Apache-2.0**, which is compatible with App Store distribution and grants patent rights. MIT would also work. Avoid GPL/AGPL: the App Store terms conflict with them, and the FSF has had GPL apps removed for this reason. | **Done:** Apache-2.0. See `VIGBT/LICENSE` and `VIGBT/NOTICE`. |
 | **Third-party code dependencies** | Only OSI-licensed packages, pinned to exact versions, with their licences listed in an in-app "Acknowledgements" screen. | None so far. `VIGBTCore` and the app use only the Swift standard library and the iOS SDK. |
 | **Build tools** | Open source. | XcodeGen (MIT), Swift toolchain (Apache-2.0). The coefficient-fitting script is in this repo. |
 | **Course data** | Open data only: OpenStreetMap (ODbL 1.0), user imports in open formats (GeoJSON or GPX), or the golfer's own marking. ODbL needs "© OpenStreetMap contributors" shown wherever course data appears, and share-alike for any course *database* the project publishes. | Specified in Phase 5.1. |

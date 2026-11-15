@@ -31,3 +31,9 @@ cd VIGBT/App && xcodegen && open VIGBT.xcodeproj
 Run it on a LiDAR iPhone (12 Pro or newer Pro model); the simulator has no camera or LiDAR. Set your
 development team under Signing & Capabilities. `VIGBT.storekit` is wired into the scheme, so the Pro
 purchase can be tested locally. See SPEC.md §7 for what each file does.
+
+## Licence
+
+VIGBT is open source under the [Apache License 2.0](LICENSE). Its dependencies and data sources must be
+open source or open data too. Course data is © OpenStreetMap contributors (ODbL). See SPEC.md §8 for the
+full policy.
