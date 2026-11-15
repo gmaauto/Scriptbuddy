@@ -57,6 +57,12 @@ final class ShotStore {
         set { defaults.set(try? JSONEncoder().encode(newValue), forKey: "colorProfile") }
     }
 
+    /// Last wind the golfer entered (ignored once stale, see `WindInput.maxAge`).
+    var wind: WindInput? {
+        get { defaults.data(forKey: "wind").flatMap { try? JSONDecoder().decode(WindInput.self, from: $0) } }
+        set { defaults.set(newValue.flatMap { try? JSONEncoder().encode($0) }, forKey: "wind") }
+    }
+
     var club: Club {
         get { defaults.string(forKey: "club").flatMap(Club.init(rawValue:)) ?? .auto }
         set { defaults.set(newValue.rawValue, forKey: "club") }

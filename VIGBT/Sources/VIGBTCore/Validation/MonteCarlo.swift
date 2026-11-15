@@ -54,6 +54,20 @@ public struct MonteCarloConfig: Sendable {
     public var poseSigmaDeg: Double = 0.5
     public var headingSigmaDeg: Double = 3
     public var useReprojectionFit: Bool = true
+    /// The golfer enters wind (strength preset + 8 directions, judged with ±40% / ±30° error).
+    public var windInput: Bool = false
+    public var headingMode: HeadingMode = .raw
+    /// Shots per tripod setup in `.session` mode.
+    public var sessionSize: Int = 8
+
+    public enum HeadingMode: String, Sendable {
+        /// Compass as measured (±`headingSigmaDeg`).
+        case raw
+        /// Flag sighted at setup: only the GPS bearing error of the tee→flag line remains.
+        case sighted
+        /// `SessionCompassLearner` corrects the compass from found balls of the same setup.
+        case session
+    }
 
     public init() {}
 }
@@ -133,9 +147,13 @@ public enum MonteCarlo {
         var tiltErr: [Double] = []
         var inEllipse = 0, inLegacy = 0, tracked = 0
         var perStrike: [StrikeType: (count: Int, tracked: Int, errors: [Double])] = [:]
+        var compass = CompassState()
 
-        for _ in 0..<config.shots {
-            let shot = simulateOne(config, &rng)
+        for i in 0..<config.shots {
+            if i % max(1, config.sessionSize) == 0 {
+                compass = CompassState(sessionErrorDeg: rng.normal(0, config.headingSigmaDeg))
+            }
+            let shot = simulateOne(config, &rng, &compass)
             perStrike[shot.strike, default: (0, 0, [])].count += 1
             frames.append(Double(shot.framesFollowed))
             guard let e = shot.errorMeters else { continue }
@@ -184,7 +202,13 @@ public enum MonteCarlo {
         return items[items.count - 1]
     }
 
-    static func simulateOne(_ cfg: MonteCarloConfig, _ rng: inout SeededRandom) -> ShotOutcome {
+    /// Compass state shared by the shots of one tripod setup.
+    struct CompassState {
+        var sessionErrorDeg: Double = 0
+        var learner = SessionCompassLearner()
+    }
+
+    static func simulateOne(_ cfg: MonteCarloConfig, _ rng: inout SeededRandom, _ compass: inout CompassState) -> ShotOutcome {
         // 1. Strike.
         let club = pick(clubs, weight: { $0.weight }, &rng)
         let strike = pick(StrikeType.allCases, weight: { $0.weight }, &rng)
@@ -212,13 +236,23 @@ public enum MonteCarlo {
         // 2. Conditions the app does not know.
         let windDir = rng.uniform(0, 2 * .pi), windSpeed = rng.uniform(0, 6)
         let wind = Vector3(windSpeed * cos(windDir), windSpeed * sin(windDir), 0)
+        // The air the ball flies through gusts ±20% around the base wind the golfer feels.
+        let flightWind = wind * rng.normal(1, 0.2)
+        // What the golfer reports: strength judged ×0.6–1.4 then snapped to a preset; direction ±30° then
+        // snapped to one of 8. (Camera heading is 0 here, so the physics frame is the target frame.)
+        let judgedMph = Units.mph(fromMetersPerSecond: windSpeed) * rng.uniform(0.6, 1.4)
+        let preset = WindStrength.allCases.min { abs($0.mph - judgedMph) < abs($1.mph - judgedMph) } ?? .calm
+        let towardDeg = (Units.degrees(windDir) + rng.uniform(-30, 30))
+        let towardSnapped = (towardDeg / 45).rounded() * 45
+        let userSpeed = Units.metersPerSecond(fromMph: preset.mph)
+        let userWind = Vector3(userSpeed * cos(Units.radians(towardSnapped)), userSpeed * sin(Units.radians(towardSnapped)), 0)
         var air = AerodynamicModel()
         air.airDensity = rng.uniform(1.12, 1.25)
         let ground = GroundModel(restitution: rng.uniform(0.25, 0.45), bounceFriction: rng.uniform(0.4, 0.6),
                                  rollingFriction: rng.uniform(0.15, 0.4))
 
         // 3. Truth: flight, then bounce and roll.
-        let truth = BallisticSolver(model: air).solve(launch: trueLaunch, spin: trueSpin, wind: wind)
+        let truth = BallisticSolver(model: air).solve(launch: trueLaunch, spin: trueSpin, wind: flightWind)
         let landV = truth.samples.last?.velocity ?? .zero
         let rest = RollModel.rest(landing: Vector3(truth.carryMeters, -truth.lateralMeters, 0), velocity: landV, ground: ground)
 
@@ -231,7 +265,7 @@ public enum MonteCarlo {
         let teeProj = LaunchVectorExtractor.project(teeWorld, calibration: trueCal)
         let f = trueCal.focalLengthPixels
         let early = BallisticSolver(model: air, timeStep: 1 / 120, maxFlightSeconds: Double(cfg.maxFrames) / 120 + 0.001,
-                                    sampleStride: 1).solve(launch: trueLaunch, spin: trueSpin, wind: wind)
+                                    sampleStride: 1).solve(launch: trueLaunch, spin: trueSpin, wind: flightWind)
         var obs: [TrackedCentroid] = []
         var followed = 0
         for k in 1...cfg.maxFrames {
@@ -258,7 +292,20 @@ public enum MonteCarlo {
         cal.cameraRollRadians += Units.radians(rng.normal(0, cfg.poseSigmaDeg))
         let refR = f * air.ballRadiusMeters / teeProj.z + rng.normal(0, cfg.radiusSigma / 6.0.squareRoot())
         let teePixel = (teeProj.x + rng.normal(0, cfg.centroidSigma / 2), teeProj.y + rng.normal(0, cfg.centroidSigma / 2))
-        let heading = rng.normal(0, cfg.headingSigmaDeg)
+        // Compass error left after correction (degrees), and the correction applied.
+        var applied = 0.0
+        let heading: Double
+        switch cfg.headingMode {
+        case .raw:
+            heading = rng.normal(0, cfg.headingSigmaDeg)
+        case .sighted:
+            let flag = rng.uniform(100, 220)
+            heading = rng.normal(0, Units.degrees(atan(3 * 2.0.squareRoot() / flag))) + rng.normal(0, 0.5)
+        case .session:
+            applied = compass.learner.errorDeg
+            heading = compass.sessionErrorDeg - applied
+        }
+        let compassCorrected = cfg.headingMode == .sighted || (cfg.headingMode == .session && compass.learner.isCorrected)
 
         // 6. The VIGBT pipeline.
         guard var est = try? LaunchVectorExtractor().extract(centroids: obs, calibration: cal, referenceRadiusPixels: refR),
@@ -271,7 +318,10 @@ public enum MonteCarlo {
             estSpin = fit.spin
         }
         guard est.launchAngleDeg > -5 else { return outcome }
-        let landing = LandingZoneEstimator().estimate(launch: est, calibration: cal, spin: estSpin).landing
+        var estimator = LandingZoneEstimator()
+        estimator.compassAndWindCorrected = cfg.windInput && compassCorrected
+        let landing = estimator.estimate(launch: est, calibration: cal, spin: estSpin,
+                                         wind: cfg.windInput ? userWind : .zero).landing
 
         // 7. Score against the true rest, after the compass error rotates the prediction.
         let h = Units.radians(heading)
@@ -292,6 +342,14 @@ public enum MonteCarlo {
         outcome.insideEllipse = (along / A) * (along / A) + (across / L) * (across / L) <= 1
         let (la, lr) = rotated(landing.carryMeters, landing.lateralMeters)
         outcome.insideLegacy = ((la - ta) * (la - ta) + (lr - tr) * (lr - tr)).squareRoot() <= max(5, 0.08 * landing.carryMeters)
+        // Session mode: the golfer finds the ball, which teaches the learner this setup's compass error.
+        // Local frame → GPS: camera heading 0 = north, so forward = north and right = east.
+        if cfg.headingMode == .session {
+            let origin = GeoCoordinate(latitude: 0, longitude: 0)
+            let predicted = GeoMath.coordinate(east: pr, north: pa, from: origin)
+            let found = GeoMath.coordinate(east: tr, north: ta, from: origin)
+            compass.learner.recordFoundBall(tee: origin, predicted: predicted, found: found, appliedErrorDeg: applied)
+        }
         outcome.speedErrorMph = Units.mph(fromMetersPerSecond: est.ballSpeed - trueLaunch.ballSpeed)
         outcome.tiltErrorDeg = estSpin.axisTiltDeg - trueSpin.axisTiltDeg
         return outcome

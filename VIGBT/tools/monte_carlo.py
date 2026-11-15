@@ -366,12 +366,21 @@ def run(args):
         wdir = rng.uniform(0, 2 * math.pi, n); wsp = rng.uniform(0, 6, n)
         wind = np.stack([wsp * np.cos(wdir), wsp * np.sin(wdir), np.zeros(n)], axis=1)
         rho = rng.uniform(1.12, 1.25, n)
+        # What a golfer would report: strength misjudged (x0.6-1.4) and snapped to presets
+        # (0/5/10/15/20 mph); direction misjudged (+/-30 deg) and snapped to 8 clock directions.
+        presets = np.array([0, 5, 10, 15, 20]) * MPH
+        judged = wsp * rng.uniform(0.6, 1.4, n)
+        user_sp = presets[np.abs(judged[:, None] - presets[None, :]).argmin(axis=1)]
+        user_dir = np.round((wdir + np.radians(rng.uniform(-30, 30, n))) / (math.pi / 4)) * (math.pi / 4)
+        wind_user = np.stack([user_sp * np.cos(user_dir), user_sp * np.sin(user_dir), np.zeros(n)], axis=1)
+        # The air the ball actually flies through gusts +/-20% around the base wind.
+        wind_flight = wind * rng.normal(1.0, 0.2, n)[:, None]
         # Truth.
-        lp, lv = fly(v0, spin, tilt, wind, rho)
+        lp, lv = fly(v0, spin, tilt, wind_flight, rho)
         g_e, g_mb, g_mr = rng.uniform(0.25, 0.45, n), rng.uniform(0.4, 0.6, n), rng.uniform(0.15, 0.4, n)
         rest_true = bounce_roll(lp, lv, g_e, g_mb, g_mr)
         # Observation + extraction.
-        track = early_track(v0, spin, tilt, wind, rho)
+        track = early_track(v0, spin, tilt, wind_flight, rho)
         vel, nframes, ok, _, est_rpm, est_tilt = observe_and_extract(track, rng, args, pred_rpm=pred_spin)
         # Prediction: club spin table, no tilt (spin axis is not observable), no wind, nominal ground.
         sp = np.linalg.norm(vel, axis=1)
@@ -383,7 +392,7 @@ def run(args):
         p_tilt = tilt if args.oracle_tilt else (est_tilt if args.fit_spin else np.zeros(n))
         if args.fit_spin:
             rows_spin = (est_rpm - spin, est_tilt - tilt)
-        p_wind = wind if args.oracle_wind else np.zeros((n, 3))
+        p_wind = wind_flight if args.oracle_wind else (wind_user if args.wind_input else np.zeros((n, 3)))
         plp, plv = fly(vel, p_spin, p_tilt, p_wind, rho if args.oracle_wind else rho_n)
         land_pred = plp
         if args.oracle_ground:
@@ -391,7 +400,7 @@ def run(args):
         else:
             rest_pred = bounce_roll(plp, plv, 0.35, 0.5, 0.25) if args.roll else plp
         # Compass heading error rotates the whole prediction about the tee.
-        he = np.radians(rng.normal(0, args.heading_sigma, n))
+        he, compass_ok = heading_errors(n, rest_pred, rest_true, rng, args)
         def rot(P):
             x, y = P[:, 0], P[:, 1]
             return np.stack([x * np.cos(he) - y * np.sin(he), x * np.sin(he) + y * np.cos(he)], axis=1)
@@ -410,13 +419,46 @@ def run(args):
         az_t = np.degrees(np.arctan2(-v0[:, 1], v0[:, 0])); az_e = np.degrees(np.arctan2(-vel[:, 1], vel[:, 0]))
         drpm = (est_rpm - spin) if args.fit_spin else (pred_spin - spin)
         dtilt = (est_tilt - tilt) if args.fit_spin else (0 - tilt)
-        rows.append(dict(restpred=np.linalg.norm(rp, axis=1), launch=launch_e, drpm=drpm, dtilt=dtilt, dsp=(sp - sp_t) / MPH, dla=launch_e - la_t, daz=az_e - az_t,
+        rows.append(dict(tight=compass_ok & bool(args.wind_input), restpred=np.linalg.norm(rp, axis=1), launch=launch_e, drpm=drpm, dtilt=dtilt, dsp=(sp - sp_t) / MPH, dla=launch_e - la_t, daz=az_e - az_t,
                          ci=ci, si=si, ok=ok, nframes=nframes, err=err, err_land=err_land_policy,
                          carry=carry_pred, along=along, lateral=lateral, rest=rest_dist))
         done += n
         print(f"  {done:>9,} shots  ({time.time() - t0:5.0f} s)", flush=True)
     D = {k: np.concatenate([r[k] for r in rows]) for k in rows[0]}
     report(D, args)
+
+
+def heading_errors(n, rest_pred, rest_true, rng, args):
+    """Compass error left in the camera heading, per shot (radians), for each correction mode."""
+    if args.heading_mode == "raw":
+        return np.radians(rng.normal(0, args.heading_sigma, n)), np.zeros(n, bool)
+    if args.heading_mode == "sighted":
+        # Sight the flag: ARKit's relative rotation is precise; what remains is the GPS bearing error of the
+        # tee→flag line (3 m per fix, flag 100–220 m away) plus about 0.5° of aiming error.
+        dist = rng.uniform(100, 220, n)
+        gps = np.degrees(np.arctan(3.0 * math.sqrt(2) / dist))
+        return np.radians(rng.normal(0, 1, n) * gps + rng.normal(0, 0.5, n)), np.ones(n, bool)
+    # "session": one compass error per tripod setup, learned from each found ball (shrinkage prior k).
+    k, m = args.session_shrinkage, args.session_size
+    s = n // m
+    base = np.repeat(np.radians(rng.normal(0, args.heading_sigma, s)), m)
+    base = np.concatenate([base, np.radians(rng.normal(0, args.heading_sigma, n - s * m))])
+    ang = lambda P: np.arctan2(P[:, 1], P[:, 0])
+    eps = (ang(rest_pred) - ang(rest_true[:, :2]) + math.pi) % (2 * math.pi) - math.pi  # shot's own angle error
+    far = np.linalg.norm(rest_true[:, :2], axis=1) > 30
+    he = base.copy()
+    corrected = np.zeros(n, bool)
+    for start in range(0, s * m, m):
+        acc, cnt = 0.0, 0
+        for j in range(start, start + m):
+            off = acc / (cnt + k)
+            he[j] = base[j] - off
+            corrected[j] = cnt > 0
+            if far[j]:
+                # Observed after finding the ball: (base - off) + eps; adding back off estimates base.
+                acc += float(np.clip(he[j] + eps[j] + off, -math.radians(12), math.radians(12)))
+                cnt += 1
+    return he, corrected
 
 
 def pct(x, q):
@@ -428,7 +470,7 @@ def report(D, args):
     print()
     print(f"VIGBT Monte Carlo: {len(ok):,} shots, seed {args.seed}, fit={args.fit}, anchor={args.anchor}, "
           f"placement yaw {args.placement_yaw:.0f}°, fit_spin={args.fit_spin}, weighted={args.weighted}, "
-          f"roll={args.roll}, min radius {args.min_radius_px}px, heading σ {args.heading_sigma}°")
+          f"roll={args.roll}, wind_input={args.wind_input}, heading={args.heading_mode}, min radius {args.min_radius_px}px, heading σ {args.heading_sigma}°")
     print(f"Tracked (≥4 frames, valid launch): {ok.mean() * 100:.2f}%   "
           f"frames followed: median {np.median(D['nframes']):.0f}, p10 {pct(D['nframes'], 10):.0f}")
     e = D["err"][ok] / YD; el = D["err_land"][ok] / YD; c = D["carry"][ok]
@@ -469,12 +511,17 @@ def report(D, args):
               f"lateral ±{L_ * s_ * 100:.1f}% of {unit}")
     # Coverage of the shipped policy (LandingZoneEstimator defaults), incl. the low-launch rule
     # (low launches are sized from the predicted rest distance instead of carry).
-    Af = np.where(lowm, args.low_along, 0.22); Lf = np.where(lowm, args.low_lateral, 0.14)
+    # Tighter ellipse once compass is corrected and wind entered (LandingZoneEstimator.calibrated*).
+    tight = D["tight"][ok]
+    Af = np.where(lowm, args.low_along, np.where(tight, args.tight_along, args.along))
+    Lf = np.where(lowm, np.where(tight, args.tight_low_lateral, args.low_lateral), np.where(tight, args.tight_lateral, args.lateral))
     basis = np.where(lowm, rp_, c)
     Am = np.maximum(5, Af * basis); Lm = np.maximum(5, Lf * basis)
     inside = (D["along"][ok] / Am) ** 2 + (D["lateral"][ok] / Lm) ** 2 <= 1
-    print(f"Shipped policy coverage (ellipse 22%/14%, low-launch {args.low_along * 100:.0f}%/{args.low_lateral * 100:.0f}%, min 5 m): "
-          f"{inside.mean() * 100:.1f}% overall, {inside[~lowm].mean() * 100:.1f}% normal, {inside[lowm].mean() * 100:.1f}% low")
+    print(f"Shipped policy coverage (ellipse {args.along * 100:.0f}%/{args.lateral * 100:.0f}%, "
+          f"tight {args.tight_along * 100:.0f}%/{args.tight_lateral * 100:.0f}%, low-launch {args.low_along * 100:.0f}%/{args.low_lateral * 100:.0f}%, min 5 m): "
+          f"{inside.mean() * 100:.1f}% overall, {inside[~lowm].mean() * 100:.1f}% normal, {inside[lowm].mean() * 100:.1f}% low; "
+          f"tight zone used for {tight.mean() * 100:.0f}% of shots")
     a, l = D["along"][ok] / YD, D["lateral"][ok] / YD
     print(f"Along-line error p90 |{pct(np.abs(a), 90):.1f}| yd, lateral p90 |{pct(np.abs(l), 90):.1f}| yd "
           f"(bias along {np.median(a):+.1f}, lateral {np.median(l):+.1f})")
@@ -516,8 +563,17 @@ if __name__ == "__main__":
     ap.add_argument("--oracle-tilt", type=int, default=0, help="ablation: predictor knows true spin axis")
     ap.add_argument("--oracle-wind", type=int, default=0, help="ablation: predictor knows wind and air density")
     ap.add_argument("--oracle-ground", type=int, default=0, help="ablation: predictor knows bounce/roll firmness")
+    ap.add_argument("--along", type=float, default=0.22, help="search ellipse, along-line fraction of carry")
+    ap.add_argument("--lateral", type=float, default=0.14, help="search ellipse, lateral fraction of carry")
+    ap.add_argument("--tight-along", type=float, default=0.20)
+    ap.add_argument("--tight-lateral", type=float, default=0.10)
+    ap.add_argument("--tight-low-lateral", type=float, default=0.08)
     ap.add_argument("--low-launch-deg", type=float, default=8.0)
     ap.add_argument("--low-along", type=float, default=0.45)
     ap.add_argument("--low-lateral", type=float, default=0.12)
+    ap.add_argument("--wind-input", type=int, default=0, help="1 = golfer enters wind (strength preset + 8 directions)")
+    ap.add_argument("--heading-mode", choices=["raw", "sighted", "session"], default="raw")
+    ap.add_argument("--session-size", type=int, default=8, help="shots per tripod setup (session mode)")
+    ap.add_argument("--session-shrinkage", type=float, default=1.0)
     ap.add_argument("--ideal", type=int, default=0, help="1 = no measurement noise or calibration error")
     run(ap.parse_args())

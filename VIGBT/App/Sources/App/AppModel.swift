@@ -18,6 +18,15 @@ final class AppModel {
     private(set) var guidance: NavigationGuidance?
     private(set) var homingStatus = "Searching"
     private(set) var statusMessage = ""
+    /// Wind entered by the golfer (SPEC §12.5). Stale wind is treated as unknown.
+    var wind: WindInput? {
+        didSet { store.wind = wind }
+    }
+    var activeWind: WindInput? { wind.flatMap { $0.isStale() ? nil : $0 } }
+    /// Compass correction for the current tripod setup (sighting and/or found balls).
+    private(set) var compassLearner = SessionCompassLearner()
+    /// Raw averaged compass heading of the current setup, before correction.
+    @ObservationIgnored private var rawCameraHeadingDeg: Double?
     var errorMessage: String?
     var showPaywall = false
     var profile: BallColorProfile {
@@ -73,6 +82,7 @@ final class AppModel {
         needsOnboarding = !s.hasAcceptedDisclaimer
         profile = s.colorProfile
         club = s.club
+        wind = s.wind
         theme = s.theme
         ballHighlightEnabled = s.ballHighlightEnabled
         wireCallbacks()
@@ -99,6 +109,9 @@ final class AppModel {
         stopEverything()
         phase = .setup
         calibration = nil
+        // New tripod setup: its compass error is unknown again.
+        compassLearner = SessionCompassLearner()
+        rawCameraHeadingDeg = nil
         location.start()
         calibrationService.start()
         if case .unsupported(let why) = calibrationService.state {
@@ -138,10 +151,72 @@ final class AppModel {
             speak("Tee distance is not locked yet. Hold the phone still.")
             return
         }
+        if calibrationService.headingSpread > CompassCorrection.maxSpreadDeg {
+            speak("The compass is unsteady. Metal nearby, such as a cart or a steel stand, can upset it. "
+                  + "The shot will still be measured, with a wider search zone.")
+        }
         calibrationService.stop()
-        calibration = cal
+        rawCameraHeadingDeg = cal.cameraHeadingDeg
+        calibration = correctedCalibration(cal)
         capture.acousticDelaySeconds = cal.distanceToTeeMeters / 343
         arm()
+    }
+
+    /// Applies the current compass correction to a calibration built from the raw heading.
+    private func correctedCalibration(_ cal: TeeCalibration) -> TeeCalibration {
+        var c = cal
+        let raw = rawCameraHeadingDeg ?? cal.cameraHeadingDeg
+        c.cameraHeadingDeg = compassLearner.corrected(raw)
+        c.compassCorrectionDeg = compassLearner.errorDeg
+        return c
+    }
+
+    // MARK: Compass sighting (SPEC §12.5)
+
+    /// Whether a flag position is known for sighting (current hole's pin or green).
+    var canSightFlag: Bool { round.currentHole?.target != nil }
+
+    /// With the tripod camera turned to point at the flag (a helper can line it up), measure the compass
+    /// error against the GPS bearing tee → flag. Then turn the camera back to the ball on the tee.
+    func sightFlag() {
+        guard let flag = round.currentHole?.target else {
+            speak("No flag position is known for this hole. Mark the pin, or skip this step: VIGBT will correct the compass from the balls you find.")
+            return
+        }
+        guard let tee = location.teeFix else {
+            speak("Waiting for a GPS fix. Stay near the tee.")
+            return
+        }
+        let sighted = calibrationService.averagedHeading(last: 5)
+        let error = CompassCorrection.sightingError(sightedHeadingDeg: sighted, tee: tee, flag: flag)
+        guard abs(error) <= 25 else {
+            speak("That reading is too far off to trust. Make sure the camera is pointing at the flag, then try again.")
+            return
+        }
+        compassLearner = SessionCompassLearner()
+        compassLearner.addSighting(errorDeg: error)
+        haptics.confirm()
+        speak(String(format: "Compass corrected by %.0f degrees. Now turn the camera back to the ball on the tee.", abs(compassLearner.errorDeg)))
+    }
+
+    // MARK: Wind (SPEC §12.5)
+
+    /// Target bearing used to turn "into you / from the left" into a compass bearing.
+    var currentTargetBearing: Double? {
+        if let p = currentPosition, let t = round.currentHole?.target { return GeoMath.bearing(from: p, to: t) }
+        if let c = calibration { return c.cameraHeadingDeg }
+        return location.heading
+    }
+
+    func setWind(strength: WindStrength, direction: WindDirection) {
+        guard let bearing = currentTargetBearing else {
+            speak("Waiting for your direction. Try again in a moment.")
+            return
+        }
+        let w = WindInput(strength: strength, direction: direction, targetBearingDeg: bearing)
+        wind = w
+        speak(w.description(targetBearingDeg: bearing))
+        if let p = currentPosition { round.update(position: p, force: true) }
     }
 
     // MARK: Capture (Phase 1.1)
@@ -198,11 +273,14 @@ final class AppModel {
         let club = club
         let ballistics = gate.isEnabled(.ballisticEstimation)
         let zone = SearchZoneModel.calibration(for: club, shots: store.shots)
+        let windVector = activeWind?.vector(cameraHeadingDeg: cal.cameraHeadingDeg) ?? .zero
+        let corrected = compassLearner.isCorrected && activeWind != nil
         analysisTask = Task {
             do {
                 let out = try await Task.detached(priority: .userInitiated) {
                     try await ClipAnalysisService.analyze(clip: clip, calibration: cal, profile: profile,
-                                                          includeBallistics: ballistics, club: club, zone: zone)
+                                                          includeBallistics: ballistics, club: club, zone: zone,
+                                                          wind: windVector, compassAndWindCorrected: corrected)
                 }.value
                 let a = out.analysis
                 let shot = ShotRecord(ballProfile: profile, calibration: cal, centroids: a.centroids,
@@ -252,7 +330,8 @@ final class AppModel {
         let sim = ShotSimulator.make(launch: launch, teeLocation: tee, cameraHeadingDeg: location.heading ?? 0)
         let a = ShotAnalyzer().analyze(frames: sim.frames, calibration: sim.calibration,
                                        referenceRadiusPixels: sim.referenceRadiusPixels,
-                                       includeBallistics: gate.isEnabled(.ballisticEstimation), club: club)
+                                       includeBallistics: gate.isEnabled(.ballisticEstimation), club: club,
+                                       wind: activeWind?.vector(cameraHeadingDeg: sim.calibration.cameraHeadingDeg) ?? .zero)
         calibration = sim.calibration
         let shot = ShotRecord(ballProfile: profile, calibration: sim.calibration, centroids: a.centroids,
                               launch: a.launch, spin: a.spin, trajectory: a.trajectory, landing: a.landing,
@@ -358,6 +437,12 @@ final class AppModel {
             shot.foundLocation = p
             store.update(shot)
             currentShot = shot
+            // Each found ball shows this setup's compass error; later shots from the same tripod use it.
+            if let target = shot.landing?.target.coordinate, shot.calibration.teeLocation == calibration?.teeLocation {
+                compassLearner.recordFoundBall(tee: shot.calibration.teeLocation, predicted: target, found: p,
+                                               appliedErrorDeg: shot.calibration.compassCorrectionDeg ?? 0)
+                if let cal = calibration { calibration = correctedCalibration(cal) }
+            }
         }
         scanner.stop()
         haptics.stopTicking()
@@ -406,6 +491,7 @@ final class AppModel {
             if let p = self.currentPosition { self.round.update(position: p) }
         }
         round.speak = { [weak self] in self?.speak($0) }
+        round.windProvider = { [weak self] in self?.activeWind }
         round.onRecommendedClub = { [weak self] club in
             guard let self, !self.clubOverridden else { return }
             self.bagClub = club

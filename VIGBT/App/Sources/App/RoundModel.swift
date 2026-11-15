@@ -18,6 +18,8 @@ final class RoundModel {
     }
 
     @ObservationIgnored var speak: (String) -> Void = { _ in }
+    /// Wind entered by the golfer, for plays-like distance.
+    @ObservationIgnored var windProvider: () -> WindInput? = { nil }
     /// Called when the recommendation changes so the club picker can pre-select it.
     @ObservationIgnored var onRecommendedClub: (BagClub) -> Void = { _ in }
     @ObservationIgnored private var lastPosition: GeoCoordinate?
@@ -133,7 +135,11 @@ final class RoundModel {
         }
         distanceToPinMeters = d
         let elevation: Double? = nil // Copernicus/SRTM elevation not bundled yet (spec §8: optional).
+        let headwind = hole.target.flatMap { t in
+            windProvider()?.headwindMph(shotBearingDeg: GeoMath.bearing(from: position, to: t))
+        }
         recommendation = ClubAdvisor.recommend(distanceToPinMeters: d, bag: bag, elevationChangeMeters: elevation,
+                                               headwindMph: headwind,
                                                hazards: CourseLocator.hazards(hole: hole, from: position))
         if let r = recommendation, r.recommended != lastRecommended {
             lastRecommended = r.recommended

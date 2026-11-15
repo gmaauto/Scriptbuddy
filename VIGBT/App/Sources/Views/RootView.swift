@@ -148,9 +148,13 @@ struct SetupView: View {
             if !model.statusMessage.isEmpty {
                 Text(model.statusMessage).font(.headline)
             }
+            CompassSection()
             CourseButton()
             AdaptiveStack {
+                WindButton()
                 SimulatedShotButton()
+            }
+            AdaptiveStack {
                 HistoryButton()
                 SettingsButton()
             }
@@ -196,6 +200,7 @@ struct ArmedView: View {
                 Text("\(model.shotsLeftToday) free shots left today").font(.headline)
             }
             ClubPicker()
+            WindButton()
             BigButton(title: "Test Strike", hint: "Simulates the sound of a strike to test recording", prominent: false) {
                 model.testStrike()
             }

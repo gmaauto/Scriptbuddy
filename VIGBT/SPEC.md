@@ -1,9 +1,10 @@
 # Vision Impaired Golf Ball Tracker (VIGBT) — Master Technical & Commercial Specification
 
-Document version: 0.8.0 · Updated 2026-11-15 · Status: draft (not yet compiled or tested on a device)
+Document version: 0.9.0 · Updated 2026-11-15 · Status: draft (not yet compiled or tested on a device)
 
 | Version | Date | Changes |
 |---|---|---|
+| 0.9.0 | 2026-11-15 | §12.5 wind input and compass correction; tighter search ellipse |
 | 0.8.0 | 2026-11-15 | §12 Monte Carlo validation (1M shots); reprojection fit with spin-axis estimation; bounce and roll; search ellipse |
 | 0.7.0 | 2026-11-15 | Phase 4.5: white-ball detector and ball-colour recommendation |
 | 0.6.0 | 2026-11-15 | Versioning rules (§10); visual accessibility requirements (§11); low-vision ball highlight |
@@ -630,14 +631,54 @@ and the compass are.
 
 ### 12.4 Next steps suggested by the data
 
-1. **Ask the user for wind**, or use the phone's barometer and weather data where available offline. This
+1. **Done in 0.9.0 (§12.5).** **Ask the user for wind**, or use the phone's barometer and weather data where available offline. This
    is worth about 5 yd at p90.
 2. **Learn ground firmness per course** from found balls, extending `SearchZoneModel` to the roll
    distance.
-3. **Correct the compass** by sighting the target line at setup (point the phone at the green or pin):
+3. **Done in 0.9.0 (§12.5), plus self-correction from found balls.** **Correct the compass** by sighting the target line at setup (point the phone at the green or pin):
    ±3° is about 10 yd at 200 yd.
 4. **Guided search pattern** inside the ellipse: walk the long axis first, because along-line errors are
    about twice the lateral ones.
+
+### 12.5 Wind input and compass correction (0.9.0)
+
+**Wind.** The golfer picks a strength (calm, light 5 mph, moderate 10, strong 15, very strong 20) and where
+they feel it coming from: one of 8 directions relative to the target, such as "into you" or "from the
+left, behind". It is stored as a true bearing so it stays right on every hole, and is ignored after 2 hours.
+It feeds the flight prediction and the plays-like distance in the club advice.
+
+The simulation assumes the golfer judges strength with ±40% error and direction with ±30°, before snapping
+to the presets. The real wind gusts ±20% around what the golfer feels.
+
+**Compass.**
+- **Steadiness check:** heading readings are averaged over the calibration (12 readings). If they are
+  unsteady (spread over 4°, usually from metal nearby), the golfer is warned.
+- **Sight the flag (optional, when the flag position is known):** turn the tripod camera to the flag,
+  press, then turn it back to the ball. ARKit tracks the rotation precisely, so only the GPS bearing of the
+  tee→flag line is left: about 1–2° at 100–220 m.
+- **Self-correction (always on):** each ball found from the same tripod setup reveals that setup's
+  compass error (bearing to the predicted rest versus bearing to the found ball).
+  `SessionCompassLearner` averages these with a 1-shot shrinkage prior and a 12° outlier clamp. A sighting
+  counts as 3 found balls.
+
+**Tighter zone.** Once the compass is corrected and wind is entered, the ellipse narrows to ±20% of carry
+along the line and ±10% across (±8% across for low launches). That is 35% less ground to search.
+
+Results (100,000 shots each; the last row is 1,000,000 shots, report in `docs/validation/`):
+
+| Mode | Median error | p90 | Search-zone coverage |
+|---|---|---|---|
+| 0.8.0 baseline | 14.3 yd | 37.7 yd | 84.3% |
+| Wind entered | 13.5 | 36.0 | 84.7% |
+| Flag sighted | 12.1 | 35.2 | 90.1% |
+| Self-correcting compass (8 shots per setup) | 11.4 | 34.7 | 90.4% |
+| Wind + self-correction, tighter zone (1M) | **11.0** | **32.7** | **87.1%** (tight zone on 87% of shots) |
+| Limit: wind and compass known exactly | 9.1 | 30.2 | 94.1% |
+
+- **Sideways error at p90** fell from 18.5 yd to 12.4 yd.
+- **Median error on pure strikes:** driver 16 yd (was 21), 7-iron 9.6 yd (was 12.5), wedge 6.2 yd (was 8.5).
+- **What's left:** the main remaining error is roll, from ground firmness the app cannot see (§12.4 item
+  2), plus spin rate.
 
 These are model results: the physics, camera and noise figures are assumptions until they are checked
 against real recorded shots. Treat real-world capture as the next validation step.

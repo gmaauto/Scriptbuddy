@@ -25,6 +25,10 @@ final class CalibrationService: NSObject {
     private(set) var pitch: Double = 0
     private(set) var roll: Double = 0
     private(set) var heading: Double = 0
+    /// Recent raw compass headings of the camera (ARKit `.gravityAndHeading`), for averaging and a quality check.
+    @ObservationIgnored private var recentHeadings: [Double] = []
+    /// Circular spread of recent headings, degrees. Above `CompassCorrection.maxSpreadDeg` → interference.
+    private(set) var headingSpread: Double = 0
 
     @ObservationIgnored private var depths: [Double] = []
     nonisolated let throttle = Throttle(interval: 0.15)
@@ -46,6 +50,8 @@ final class CalibrationService: NSObject {
         config.frameSemantics.insert(.sceneDepth)
         session.delegate = self
         depths.removeAll()
+        recentHeadings.removeAll()
+        headingSpread = 0
         state = .searching
         session.run(config, options: [.resetTracking, .removeExistingAnchors])
     }
@@ -56,11 +62,17 @@ final class CalibrationService: NSObject {
         if case .stable = state {} else { state = .idle }
     }
 
-    /// Builds the calibration once stable. FOV and dimensions come from the capture format actually used.
+    /// Averaged raw heading over the last `count` readings (smooths compass jitter).
+    func averagedHeading(last count: Int = 12) -> Double {
+        CompassCorrection.circularMean(Array(recentHeadings.suffix(count))) ?? heading
+    }
+
+    /// Builds the calibration once stable, with the **raw** averaged compass heading; `AppModel` applies the
+    /// compass correction. FOV and dimensions come from the capture format actually used.
     func makeCalibration(fieldOfViewDegrees: Double, width: Int, height: Int, teeLocation: GeoCoordinate) -> TeeCalibration? {
         guard case let .stable(distance) = state else { return nil }
         return TeeCalibration(distanceToTeeMeters: distance, cameraPitchRadians: pitch, cameraRollRadians: roll,
-                              cameraHeadingDeg: heading, horizontalFOVRadians: Units.radians(fieldOfViewDegrees),
+                              cameraHeadingDeg: averagedHeading(), horizontalFOVRadians: Units.radians(fieldOfViewDegrees),
                               imageWidth: Double(width), imageHeight: Double(height), teeLocation: teeLocation)
     }
 
@@ -102,6 +114,9 @@ final class CalibrationService: NSObject {
         pitch = r.pitch
         roll = r.roll
         heading = r.heading
+        recentHeadings.append(r.heading)
+        if recentHeadings.count > 12 { recentHeadings.removeFirst(recentHeadings.count - 12) }
+        headingSpread = CompassCorrection.circularSpread(recentHeadings)
         guard let depth = r.depth, (1.0...10.0).contains(depth) else {
             depths.removeAll()
             if case .stable = state { return }

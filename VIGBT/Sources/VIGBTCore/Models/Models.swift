@@ -53,6 +53,9 @@ public struct TeeCalibration: Codable, Equatable, Sendable {
     public var imageHeight: Double
     /// Tee box location at the time of calibration.
     public var teeLocation: GeoCoordinate
+    /// Compass error already subtracted from `cameraHeadingDeg` (sighting and/or found balls), degrees.
+    /// Optional so calibrations saved before 0.9.0 still decode.
+    public var compassCorrectionDeg: Double?
 
     public init(distanceToTeeMeters: Double, cameraPitchRadians: Double, cameraRollRadians: Double = 0,
                 cameraHeadingDeg: Double, horizontalFOVRadians: Double,

@@ -6,6 +6,24 @@ All notable changes to VIGBT are recorded here. The format follows
 
 Versions before 1.0.0 are development builds that have not yet been compiled or tested on a device.
 
+## [0.9.0] - 2026-11-15
+
+### Added
+- Wind input (SPEC §12.5):
+  - `WindInput`, with strength presets (calm to very strong) and 8 directions relative to the target ("into you", "from the left", …), stored as a compass bearing. Wind older than 2 hours is ignored.
+  - The wind feeds the flight prediction and the plays-like distance used for club advice.
+  - A Wind picker with large buttons, on the Setup and Ready screens.
+- Compass correction:
+  - `CompassCorrection` averages heading readings and checks how steady they are. An unsteady compass usually means metal nearby, and the golfer is warned.
+  - Optional **Sight the flag** step at setup, used when the flag position is known.
+  - `SessionCompassLearner` learns each tripod setup's compass error from the balls the golfer finds.
+- Tighter search ellipse once the compass is corrected and wind is entered: ±20% / ±10% of carry, 35% less area to search.
+- Monte Carlo modes `--wind-input` and `--heading-mode raw|sighted|session` (Python and Swift), and the million-shot report `docs/validation/monte-carlo-1M-seed2026-wind-compass.txt`.
+
+### Changed
+- The calibration stores the averaged raw heading. `TeeCalibration.compassCorrectionDeg` records the correction applied to each shot; it is optional, so older shots still load.
+- In the simulator, the ball now flies through wind that gusts ±20% around the base wind.
+
 ## [0.8.0] - 2026-11-15
 
 ### Added

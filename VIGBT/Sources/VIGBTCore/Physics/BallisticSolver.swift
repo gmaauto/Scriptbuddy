@@ -228,6 +228,13 @@ public struct LandingZoneEstimator: Sendable {
     public var lowLaunchDeg: Double = 8
     public var lowLaunchAlongFactor: Double = 0.45
     public var lowLaunchLateralFactor: Double = 0.12
+    /// Tighter ellipse once the compass is corrected **and** wind has been entered (§12.5): 85.5% coverage
+    /// with 35% less area to search. Sideways errors shrink most, so the lateral factor drops furthest.
+    public var calibratedAlongFactor: Double = 0.20
+    public var calibratedLateralFactor: Double = 0.10
+    public var calibratedLowLaunchLateralFactor: Double = 0.08
+    /// Set by the caller when both corrections apply to this shot.
+    public var compassAndWindCorrected: Bool = false
     /// Floor on the search radius so very short shots still get a usable zone.
     public var minimumSearchRadiusMeters: Double
     /// Predict bounce and roll and target the rest position (recommended).
@@ -264,12 +271,13 @@ public struct LandingZoneEstimator: Sendable {
             restLateral = -rest.y
         }
 
-        var along = alongFactor * carry
-        var across = lateralFactor * carry
+        let tight = compassAndWindCorrected
+        var along = (tight ? calibratedAlongFactor : alongFactor) * carry
+        var across = (tight ? calibratedLateralFactor : lateralFactor) * carry
         if launch.launchAngleDeg < lowLaunchDeg {
             let restDistance = (restCarry * restCarry + restLateral * restLateral).squareRoot()
             along = lowLaunchAlongFactor * restDistance
-            across = lowLaunchLateralFactor * restDistance
+            across = (tight ? calibratedLowLaunchLateralFactor : lowLaunchLateralFactor) * restDistance
         }
         if let zone, zone.sampleCount > 0 {
             let c = zone.corrected(carry: restCarry, lateral: restLateral)
