@@ -105,21 +105,8 @@ public struct LaunchVectorExtractor: Sendable {
                                            frameRate: Double = 120, frames: ClosedRange<Int> = 1...12,
                                            gravity: Double = 9.80665) -> (centroids: [TrackedCentroid], referenceRadius: Double) {
         let f = calibration.focalLengthPixels
-        let cx = calibration.imageWidth / 2
-        let cy = calibration.imageHeight / 2
         let v = launch.initialVelocity
-        func project(_ w: Vector3) -> (x: Double, y: Double, z: Double) {
-            // world (fwd, left, up) → level (right, down, fwd)
-            let level = Vector3(-w.y, -w.z, w.x)
-            // inverse pitch, then inverse roll
-            let p = calibration.cameraPitchRadians
-            let r = calibration.cameraRollRadians
-            let y1 = level.y * cos(p) + level.z * sin(p)
-            let z1 = -level.y * sin(p) + level.z * cos(p)
-            let x0 = level.x * cos(r) + y1 * sin(r)
-            let y0 = -level.x * sin(r) + y1 * cos(r)
-            return (cx + f * x0 / z1, cy + f * y0 / z1, z1)
-        }
+        func project(_ w: Vector3) -> (x: Double, y: Double, z: Double) { Self.project(w, calibration: calibration) }
         let tee = project(teeWorldPosition)
         let refR = f * ballRadiusMeters / tee.z
         var out: [TrackedCentroid] = []
@@ -130,5 +117,28 @@ public struct LaunchVectorExtractor: Sendable {
             out.append(TrackedCentroid(frameOffset: i, x: p.x, y: p.y, radiusPixels: f * ballRadiusMeters / p.z, score: 1))
         }
         return (out, refR)
+    }
+
+    /// Pinhole projection of a camera-relative world point (x forward, y left, z up) to pixels and depth.
+    public static func project(_ w: Vector3, calibration: TeeCalibration) -> (x: Double, y: Double, z: Double) {
+        let f = calibration.focalLengthPixels
+        // world (fwd, left, up) → level (right, down, fwd)
+        let lx = -w.y, ly = -w.z, lz = w.x
+        // inverse pitch, then inverse roll
+        let p = calibration.cameraPitchRadians
+        let r = calibration.cameraRollRadians
+        let y1 = ly * cos(p) + lz * sin(p)
+        let z1 = -ly * sin(p) + lz * cos(p)
+        let x0 = lx * cos(r) + y1 * sin(r)
+        let y0 = -lx * sin(r) + y1 * cos(r)
+        return (calibration.imageWidth / 2 + f * x0 / z1, calibration.imageHeight / 2 + f * y0 / z1, z1)
+    }
+
+    /// Inverse of `project` for a pixel at a known optical-axis depth (used for the resting ball on the tee).
+    public static func backProject(x: Double, y: Double, depth: Double, calibration: TeeCalibration) -> Vector3 {
+        let f = calibration.focalLengthPixels
+        let cam = Vector3((x - calibration.imageWidth / 2) * depth / f, (y - calibration.imageHeight / 2) * depth / f, depth)
+        let l = level(cam, pitch: calibration.cameraPitchRadians, roll: calibration.cameraRollRadians)
+        return Vector3(l.z, -l.x, -l.y)
     }
 }

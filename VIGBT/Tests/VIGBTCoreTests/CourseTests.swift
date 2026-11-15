@@ -309,8 +309,9 @@ final class CourseTests: XCTestCase {
         let plain = LandingZoneEstimator().estimate(launch: launch, calibration: cal)
         let zone = SearchZoneCalibration(carryBias: -0.1, lateralBias: 0.02, radiusFactor: 0.05, sampleCount: 6)
         let learned = LandingZoneEstimator().estimate(launch: launch, calibration: cal, zone: zone)
-        XCTAssertEqual(learned.landing.carryMeters, plain.landing.carryMeters * 0.9, accuracy: 1e-6)
-        XCTAssertEqual(learned.landing.lateralMeters, 0.02 * plain.landing.carryMeters, accuracy: 1e-6)
-        XCTAssertEqual(learned.landing.searchRadiusMeters, 0.05 * learned.landing.carryMeters, accuracy: 1e-6)
+        XCTAssertEqual(learned.landing.carryMeters, plain.landing.carryMeters, accuracy: 1e-9, "raw carry unchanged")
+        XCTAssertEqual(learned.landing.restCarry, plain.landing.restCarry * 0.9, accuracy: 1e-6)
+        XCTAssertEqual(learned.landing.restLateral, plain.landing.restLateral + 0.02 * plain.landing.restCarry, accuracy: 1e-6)
+        XCTAssertEqual(learned.landing.searchRadiusMeters, 0.05 * learned.landing.restCarry, accuracy: 1e-6)
     }
 }

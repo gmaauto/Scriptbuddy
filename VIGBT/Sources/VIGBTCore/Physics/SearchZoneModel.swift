@@ -11,14 +11,14 @@ public struct LandingErrorSample: Equatable, Sendable {
 }
 
 /// Learned correction for the landing zone: a carry bias, a lateral bias (both as fractions of carry) and
-/// a search-radius factor replacing the fixed R_search = 0.08 × carry.
+/// a search-radius factor replacing the default circle (0.18 × carry, SPEC §12).
 public struct SearchZoneCalibration: Codable, Equatable, Sendable {
     public var carryBias: Double
     public var lateralBias: Double
     public var radiusFactor: Double
     public var sampleCount: Int
 
-    public static let uncalibrated = SearchZoneCalibration(carryBias: 0, lateralBias: 0, radiusFactor: 0.08, sampleCount: 0)
+    public static let uncalibrated = SearchZoneCalibration(carryBias: 0, lateralBias: 0, radiusFactor: 0.18, sampleCount: 0)
 
     public init(carryBias: Double, lateralBias: Double, radiusFactor: Double, sampleCount: Int) {
         self.carryBias = carryBias
@@ -41,23 +41,24 @@ public enum SearchZoneModel {
     public static let minimumSamples = 5
     /// Radius covers this fraction of past misses (after bias removal).
     public static let coverage = 0.8
-    public static let radiusFactorBounds: ClosedRange<Double> = 0.04...0.20
+    public static let radiusFactorBounds: ClosedRange<Double> = 0.06...0.60
     /// Bias is capped so a few odd shots cannot drag the prediction far.
     public static let maxBias = 0.15
 
     public static func samples(from shots: [ShotRecord]) -> [LandingErrorSample] {
         shots.compactMap { s -> LandingErrorSample? in
             guard s.isSimulated != true, let landing = s.landing, let found = s.foundLocation,
-                  landing.carryMeters > 20 else { return nil }
+                  landing.restCarry > 20 else { return nil }
             let tee = s.calibration.teeLocation
             let o = GeoMath.enuOffset(of: found, from: tee)
             let h = Units.radians(s.calibration.cameraHeadingDeg)
             // Along the camera heading, and to its right.
             let along = o.east * sin(h) + o.north * cos(h)
             let right = o.east * cos(h) - o.north * sin(h)
-            return LandingErrorSample(club: s.club, predictedCarryMeters: landing.carryMeters,
-                                      alongError: along - landing.carryMeters,
-                                      lateralError: right - landing.lateralMeters)
+            // Compared with the predicted rest position, which is where the golfer was sent.
+            return LandingErrorSample(club: s.club, predictedCarryMeters: landing.restCarry,
+                                      alongError: along - landing.restCarry,
+                                      lateralError: right - landing.restLateral)
         }
     }
 

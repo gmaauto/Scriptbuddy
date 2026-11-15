@@ -1,9 +1,10 @@
 # Vision Impaired Golf Ball Tracker (VIGBT) — Master Technical & Commercial Specification
 
-Document version: 0.7.0 · Updated 2026-11-15 · Status: draft (not yet compiled or tested on a device)
+Document version: 0.8.0 · Updated 2026-11-15 · Status: draft (not yet compiled or tested on a device)
 
 | Version | Date | Changes |
 |---|---|---|
+| 0.8.0 | 2026-11-15 | §12 Monte Carlo validation (1M shots); reprojection fit with spin-axis estimation; bounce and roll; search ellipse |
 | 0.7.0 | 2026-11-15 | Phase 4.5: white-ball detector and ball-colour recommendation |
 | 0.6.0 | 2026-11-15 | Versioning rules (§10); visual accessibility requirements (§11); low-vision ball highlight |
 | 0.5.0 | 2026-11-15 | Phase 5 built; Phase 4.4 learned search zone; §9 research |
@@ -556,4 +557,88 @@ for everything else. Apple's accessibility guidelines also apply.
 | **Smart Invert** | The camera preview, video, map and ball highlight are excluded from inversion. |
 | **Screen reader** | Headings, combined elements, hints, and announcements for status changes. Decorative images are hidden. |
 | **Low vision** | Ball highlight: a magnifiable view of the mask with a ring around the ball. Very large distance numbers on the Walk screen. |
+
+## 12. Monte Carlo validation (1,000,000 simulated shots)
+
+**Question.** Starting only from what the tee camera sees in the first few frames, how reliably can VIGBT
+predict where the ball ends up? This covers every kind of strike, including skulls, slices, hooks and
+shanks.
+
+### 12.1 Method
+
+- **Harness.** `tools/monte_carlo.py` (vectorised NumPy, about 8 minutes per million shots) and the Swift
+  `MonteCarlo` (the real `VIGBTCore` code; `swift run -c release vigbt-montecarlo --shots N`, plus a
+  400-shot CI test). Both share the same models and seeds.
+- **Shot mix.**
+  - Clubs: driver (35%), 7-iron (40%) and wedge (25%), at amateur speeds, launch angles and spins.
+  - Strikes: pure 40%, slice 15%, hook 8%, thin/skull 8%, push 6%, pull 6%, fat 6%, toe/heel 6%,
+    topped 3%, shank 1%, pop-up 1%.
+  - Each strike changes speed, launch angle, spin, spin-axis tilt and direction.
+- **Truth (unknown to the app).**
+  - The 3D flight with the true spin and spin axis.
+  - Random wind (0–6 m/s from any direction) and air density.
+  - **Bounce and roll** on ground of random firmness.
+- **Camera.**
+  - Down-the-line tripod, 2.5–4 m behind the tee and 0.8–1.4 m high, Ultra-Wide lens, 120 fps.
+  - The ball is followed **until the camera loses it**: it leaves the frame or appears smaller than
+    1 px in radius. The median is 36 frames (0.3 s); 1 shot in 10 gets fewer than 25.
+- **Measurement errors.**
+  - Ball centre ±0.35 px.
+  - Ball radius ±(0.2 px + 3%).
+  - 5% of frames missed.
+  - LiDAR tee distance ±2 cm.
+  - Camera tilt and roll ±0.5°.
+  - **Compass heading ±3°.**
+- **Score.** The distance from the predicted target to the **true rest position**, and whether the ball
+  lies inside the search zone.
+
+### 12.2 Findings and the changes they drove
+
+| Finding | Change (0.8.0) |
+|---|---|
+| Turning each frame's apparent size into a distance gave speed errors of ±21–30 mph (p90) with a slow bias. For a down-the-line camera, almost all speed information comes from the ball shrinking. | **`ReprojectionFitter`**: anchors the flight at the tee and fits the 3D flight (gravity, drag, lift) to the raw pixel position and radius, each weighted by its own noise. Result: speed ±2.9 mph, launch ±1.0°, direction ±0.5° (p90). |
+| Spin axis (slice/hook) was the largest single unknown. | The same fit estimates **spin-axis tilt from the curve of the first 0.3 s** (a slice moves about 20 px sideways). Tilt error drops from ±27° to **±8°** and lateral error p90 from 33 to 18.5 yd. Spin *rate* is not observable that early, so it stays with the club table (prior ±700 rpm). |
+| The golfer looks for the ball where it **stopped**, not where it landed. A driver typically rolls 15–25 yd. | **`RollModel`** (impulse bounces, then rolling friction). The navigation target is now the predicted rest position. |
+| The spec's 8%-of-carry circle around the landing point contained only **13%** of balls. | **Search ellipse** around the predicted rest point: ±22% of carry along the line and ±14% across (80% coverage; the ellipse is about 6% smaller than the equivalent circle). |
+| Thin, skulled and topped shots are mostly roll, and the roll depends on ground firmness. | Below 8° launch the ellipse is sized from the predicted rest distance: ±45% along and ±12% across. Coverage for those shots rises from 19% to **87%**. |
+| Placing the tripod face-on gives the best speed (±1.1 mph) but only about 11 frames and worse direction. | Keep down-the-line as the recommended placement. 45° behind is an acceptable alternative. |
+
+### 12.3 Results (1,000,000 shots, seed 2026, full report in `docs/validation/`)
+
+| Measure | Value |
+|---|---|
+| Launch measured (at least 4 frames, valid fit) | 100.0% |
+| Error to final rest | median **14.3 yd**, p80 27.0, p90 37.5, p95 50.4 |
+| Search-zone coverage, shipped policy | **84.6%** (normal 84.5%, low launch 87.2%) |
+| Same, old policy (8% circle at landing) | 13.2% |
+| Median error by club (pure strikes) | driver 21 yd, 7-iron 12.5 yd, wedge 8.5 yd |
+| Worst strike types (p90) | driver thin/skull 100 yd, topped 120 yd (now inside their wider zones 87% of the time) |
+
+**What still limits accuracy** (each figure is the p90 error with that unknown removed; baseline 48.7 yd
+before spin-axis estimation):
+
+| Unknown removed | p90 error |
+|---|---|
+| Spin axis | 39.2 yd (now largely recovered by the fit) |
+| Wind | 43.4 yd |
+| Ground firmness | 44.0 yd |
+| Compass | 46.4 yd |
+| Spin rate | 48.2 yd |
+
+With everything known, the median error is 3 yd. Measurement is not the bottleneck. Wind, ground firmness
+and the compass are.
+
+### 12.4 Next steps suggested by the data
+
+1. **Ask the user for wind**, or use the phone's barometer and weather data where available offline. This
+   is worth about 5 yd at p90.
+2. **Learn ground firmness per course** from found balls, extending `SearchZoneModel` to the roll
+   distance.
+3. **Correct the compass** by sighting the target line at setup (point the phone at the green or pin):
+   ±3° is about 10 yd at 200 yd.
+4. **Guided search pattern** inside the ellipse: walk the long axis first, because along-line errors are
+   about twice the lateral ones.
+
+These are model results: the physics, camera and noise figures are assumptions until they are checked
+against real recorded shots. Treat real-world capture as the next validation step.
 

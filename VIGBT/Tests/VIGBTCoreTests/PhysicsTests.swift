@@ -87,10 +87,15 @@ final class PhysicsTests: XCTestCase {
         let launch = LaunchVector(ballSpeed: Units.metersPerSecond(fromMph: 120), launchAngleDeg: 16, azimuthDeg: 0)
         let result = LandingZoneEstimator().estimate(launch: launch, calibration: cal)
         XCTAssertEqual(result.spin.rpm, 2_200 + 140 * 16, accuracy: 1e-9)
-        XCTAssertEqual(result.landing.searchRadiusMeters, 0.08 * result.trajectory.carryMeters, accuracy: 1e-9)
+        let e = LandingZoneEstimator()
+        XCTAssertEqual(result.landing.searchAlongMeters ?? 0, e.alongFactor * result.trajectory.carryMeters, accuracy: 1e-9)
+        XCTAssertEqual(result.landing.searchLateralMeters ?? 0, e.lateralFactor * result.trajectory.carryMeters, accuracy: 1e-9)
+        XCTAssertEqual(result.landing.searchRadiusMeters,
+                       (e.alongFactor * e.lateralFactor).squareRoot() * result.trajectory.carryMeters, accuracy: 1e-9)
+        XCTAssertGreaterThan(result.landing.restCarry, result.landing.carryMeters, "ball rolls on after landing")
         XCTAssertEqual(result.landing.target.bearingFromTeeDeg, 90, accuracy: 1e-6)
         let d = GeoMath.distance(from: tee, to: result.landing.target.coordinate)
-        XCTAssertEqual(d, result.trajectory.carryMeters, accuracy: 0.01)
+        XCTAssertEqual(d, result.landing.restCarry, accuracy: 0.01, "navigation target is the rest point")
     }
 
     func testClubSelectionFixesIronCarry() {

@@ -12,7 +12,9 @@ enum ClipAnalysisService {
 
     /// Frames before T0 used to measure the resting ball, and frames after T0 used for tracking.
     static let preFrames = 8
-    static let postFrames = 20
+    /// Follow the ball until the camera loses it: the Monte Carlo run (SPEC §12) measured a median of 36
+    /// usable frames for a down-the-line tripod.
+    static let postFrames = 40
 
     static func analyze(clip: CapturedClip, calibration: TeeCalibration, profile: BallColorProfile?,
                         includeBallistics: Bool, club: Club, zone: SearchZoneCalibration?) async throws -> Output {
@@ -43,6 +45,7 @@ enum ClipAnalysisService {
 
         var frames = Array(repeating: [DetectionCandidate](), count: postFrames)
         var restingRadii: [Double] = []
+        var resting: [DetectionCandidate] = []
         var previous: FrameMasks?
 
         while let sample = output.copyNextSampleBuffer() {
@@ -54,7 +57,10 @@ enum ClipAnalysisService {
 
             if offset <= -2, profile?.preset == .white {
                 // White ball on the tee: colour alone also matches sky and tee markers.
-                if let r = whiteRestingRadius(pixels, expected: expectedRadius) { restingRadii.append(r) }
+                if let b = whiteResting(pixels, expected: expectedRadius) {
+                    restingRadii.append(b.radiusPixels)
+                    resting.append(b)
+                }
             } else if offset <= -2, profile != nil {
                 // Resting ball on the tee: the best round, colour-matched blob near the expected size.
                 let still = blobs.detect(mask: masks.color, width: masks.width, height: masks.height, color: masks.color)
@@ -63,6 +69,7 @@ enum ClipAnalysisService {
                     .filter({ scorer.circularity(of: $0) != nil })
                     .max(by: { $0.colorMatchFraction * $0.radiusPixels < $1.colorMatchFraction * $1.radiusPixels }) {
                     restingRadii.append(ball.radiusPixels)
+                    resting.append(ball)
                 }
             }
             if offset >= 1, offset <= postFrames, let prev = previous, prev.width == masks.width, prev.height == masks.height {
@@ -75,13 +82,21 @@ enum ClipAnalysisService {
         if reader.status == .failed { throw reader.error ?? CaptureError.exportFailed("Decoding failed.") }
 
         let reference: Double? = restingRadii.isEmpty ? nil : restingRadii.sorted()[restingRadii.count / 2]
+        // Median resting-ball position anchors the reprojection fit at the tee.
+        var restingBall: DetectionCandidate?
+        if !resting.isEmpty {
+            let xs = resting.map(\.centerX).sorted(), ys = resting.map(\.centerY).sorted()
+            let r = reference ?? resting[0].radiusPixels
+            restingBall = DetectionCandidate(centerX: xs[xs.count / 2], centerY: ys[ys.count / 2],
+                                             width: 2 * r, height: 2 * r, colorMatchFraction: 1)
+        }
         let analysis = ShotAnalyzer().analyze(frames: frames, calibration: calibration,
                                               referenceRadiusPixels: reference, includeBallistics: includeBallistics,
-                                              club: club, zone: zone)
+                                              club: club, zone: zone, restingBall: restingBall)
         return Output(analysis: analysis, referenceRadiusPixels: reference)
     }
 
-    private static func whiteRestingRadius(_ pixels: CVPixelBuffer, expected: Double) -> Double? {
+    private static func whiteResting(_ pixels: CVPixelBuffer, expected: Double) -> DetectionCandidate? {
         CVPixelBufferLockBaseAddress(pixels, .readOnly)
         defer { CVPixelBufferUnlockBaseAddress(pixels, .readOnly) }
         guard let base = CVPixelBufferGetBaseAddress(pixels) else { return nil }
@@ -91,8 +106,7 @@ enum ClipAnalysisService {
         let r = detector.detect(bgra: UnsafeRawBufferPointer(start: base, count: bpr * h),
                                 width: CVPixelBufferGetWidth(pixels), height: h, bytesPerRow: bpr, step: 1)
         return r.candidates
-            .first { $0.radiusPixels >= 0.4 * expected && $0.radiusPixels <= 2.5 * expected }?
-            .radiusPixels
+            .first { $0.radiusPixels >= 0.4 * expected && $0.radiusPixels <= 2.5 * expected }
     }
 
     private static func buildMasks(_ pixels: CVPixelBuffer, range: HSVRange?) -> FrameMasks {

@@ -6,6 +6,24 @@ All notable changes to VIGBT are recorded here. The format follows
 
 Versions before 1.0.0 are development builds that have not yet been compiled or tested on a device.
 
+## [0.8.0] - 2026-11-15
+
+### Added
+- Monte Carlo validation (SPEC §12):
+  - `tools/monte_carlo.py` (1,000,000 shots in about 8 minutes) and the Swift `MonteCarlo` harness, which runs the real `VIGBTCore` pipeline;
+  - a `vigbt-montecarlo` command-line runner, a CI test, and a 200,000-shot CI run;
+  - the full million-shot report in `docs/validation/`.
+- `ReprojectionFitter`: a tee-anchored 3D flight fit on raw pixel measurements that also estimates the spin-axis tilt from early curvature. Ball speed error at p90 drops from ±21–30 mph to ±2.9 mph, and spin-axis error from ±27° to ±8°.
+- `RollModel` and `GroundModel`: bounce and roll. The navigation target is now the predicted rest position.
+- Search ellipse (±22% of carry along the line, ±14% across) with a separate low-launch rule (±45% / ±12% of the predicted rest distance). Coverage of the true rest position is 84.6%, against 13.2% for the old 8% circle.
+- `SeededRandom` (reproducible SplitMix64 random numbers).
+
+### Changed
+- `LandingEstimate` gains rest and ellipse fields. They are optional, so shots saved before 0.8.0 still load.
+- `SearchZoneModel` now measures found balls against the predicted rest position. Its default radius is 0.18 × carry.
+- Ball tracking follows up to 40 frames, until the camera loses the ball.
+- Readouts state where the ball should stop and the size of the search zone.
+
 ## [0.7.0] - 2026-11-15
 
 ### Added

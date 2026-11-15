@@ -212,42 +212,83 @@ public struct BallisticSolver: Sendable {
     }
 }
 
-/// Phase 2 orchestration: launch vector → spin → trajectory → dispersion → WGS84 target.
+/// Phase 2 orchestration: launch vector → spin → trajectory → bounce & roll → search zone → WGS84 target.
 public struct LandingZoneEstimator: Sendable {
     public var solver: BallisticSolver
-    /// R_search = dispersionFactor × X_carry.
+    /// Circle fallback: R_search = dispersionFactor × carry. The spec's original 0.08 covered only 9–33% of
+    /// balls in the Monte Carlo run (§12); 0.18 is the measured 80% coverage radius.
     public var dispersionFactor: Double
+    /// Ellipse semi-axes as fractions of carry (80% coverage in §12). Errors along the line are larger
+    /// than across it because roll, wind and spin rate mostly change distance.
+    public var alongFactor: Double
+    public var lateralFactor: Double
+    /// Low launches (thin, skulled, topped) are mostly roll, which depends on ground firmness the app cannot
+    /// see. Below `lowLaunchDeg` the ellipse is sized from the predicted *rest distance* instead of carry:
+    /// ±45% along, ±12% across covers 87% of them (vs 19% with the normal ellipse, §12).
+    public var lowLaunchDeg: Double = 8
+    public var lowLaunchAlongFactor: Double = 0.45
+    public var lowLaunchLateralFactor: Double = 0.12
     /// Floor on the search radius so very short shots still get a usable zone.
     public var minimumSearchRadiusMeters: Double
+    /// Predict bounce and roll and target the rest position (recommended).
+    public var predictRoll: Bool
+    public var ground: GroundModel
 
-    public init(solver: BallisticSolver = BallisticSolver(), dispersionFactor: Double = 0.08,
-                minimumSearchRadiusMeters: Double = 5) {
+    public init(solver: BallisticSolver = BallisticSolver(), dispersionFactor: Double = 0.18,
+                alongFactor: Double = 0.22, lateralFactor: Double = 0.14,
+                minimumSearchRadiusMeters: Double = 5, predictRoll: Bool = true, ground: GroundModel = GroundModel()) {
         self.solver = solver
         self.dispersionFactor = dispersionFactor
+        self.alongFactor = alongFactor
+        self.lateralFactor = lateralFactor
         self.minimumSearchRadiusMeters = minimumSearchRadiusMeters
+        self.predictRoll = predictRoll
+        self.ground = ground
     }
 
-    /// - Parameter zone: learned landing correction (`SearchZoneModel`); nil uses the fixed spec factor.
+    /// - Parameter zone: learned correction (`SearchZoneModel`), applied to the rest position; nil uses the defaults.
     public func estimate(launch: LaunchVector, calibration: TeeCalibration,
                          spin: SpinEstimate? = nil, wind: Vector3 = .zero, zone: SearchZoneCalibration? = nil)
         -> (spin: SpinEstimate, trajectory: TrajectorySolution, landing: LandingEstimate) {
         let spin = spin ?? SpinEstimator.estimate(launchAngleDeg: launch.launchAngleDeg)
         let traj = solver.solve(launch: launch, spin: spin, wind: wind)
-        var carry = traj.carryMeters
-        var lateral = traj.lateralMeters
-        var radius = dispersionFactor * carry
-        if let zone, zone.sampleCount > 0 {
-            let c = zone.corrected(carry: carry, lateral: lateral)
-            (carry, lateral, radius) = (c.carry, c.lateral, c.radius)
+        let carry = traj.carryMeters
+        let lateral = traj.lateralMeters
+
+        var restCarry = carry
+        var restLateral = lateral
+        if predictRoll, let last = traj.samples.last {
+            // Physics frame has +y = left; LandingEstimate reports lateral as + = right.
+            let rest = RollModel.rest(landing: Vector3(carry, -lateral, 0), velocity: last.velocity, ground: ground)
+            restCarry = rest.x
+            restLateral = -rest.y
         }
-        radius = max(minimumSearchRadiusMeters, radius)
+
+        var along = alongFactor * carry
+        var across = lateralFactor * carry
+        if launch.launchAngleDeg < lowLaunchDeg {
+            let restDistance = (restCarry * restCarry + restLateral * restLateral).squareRoot()
+            along = lowLaunchAlongFactor * restDistance
+            across = lowLaunchLateralFactor * restDistance
+        }
+        if let zone, zone.sampleCount > 0 {
+            let c = zone.corrected(carry: restCarry, lateral: restLateral)
+            restCarry = c.carry
+            restLateral = c.lateral
+            along = c.radius
+            across = c.radius
+        }
+        along = max(minimumSearchRadiusMeters, along)
+        across = max(minimumSearchRadiusMeters, across)
+        let radius = (along * across).squareRoot()
         let target = GeoMath.project(teeLocation: calibration.teeLocation,
                                      cameraHeadingDeg: calibration.cameraHeadingDeg,
-                                     carryMeters: carry,
-                                     lateralMeters: lateral,
+                                     carryMeters: restCarry,
+                                     lateralMeters: restLateral,
                                      searchRadiusMeters: radius)
-        let landing = LandingEstimate(carryMeters: carry, lateralMeters: lateral,
-                                      searchRadiusMeters: radius, target: target)
+        let landing = LandingEstimate(carryMeters: carry, lateralMeters: lateral, searchRadiusMeters: radius,
+                                      target: target, restCarryMeters: restCarry, restLateralMeters: restLateral,
+                                      searchAlongMeters: along, searchLateralMeters: across)
         return (spin, traj, landing)
     }
 }

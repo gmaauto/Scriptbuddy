@@ -317,17 +317,38 @@ public struct TrajectorySolution: Codable, Equatable, Sendable {
 }
 
 public struct LandingEstimate: Codable, Equatable, Sendable {
+    /// Where the ball first lands (carry), relative to the camera heading.
     public var carryMeters: Double
     public var lateralMeters: Double
-    /// R_search ≈ 0.08 × X_carry.
+    /// Equal-area radius of the search zone (used for arrival and as the circle fallback).
     public var searchRadiusMeters: Double
+    /// Navigation target: the predicted **rest** position (SPEC §12), or the landing point if roll is off.
     public var target: TargetCoordinate
+    /// Predicted rest position after bounce and roll. Optional so shots saved before 0.8.0 still decode.
+    public var restCarryMeters: Double?
+    public var restLateralMeters: Double?
+    /// Search ellipse semi-axes along the flight line and across it (SPEC §12).
+    public var searchAlongMeters: Double?
+    public var searchLateralMeters: Double?
 
-    public init(carryMeters: Double, lateralMeters: Double, searchRadiusMeters: Double, target: TargetCoordinate) {
+    public init(carryMeters: Double, lateralMeters: Double, searchRadiusMeters: Double, target: TargetCoordinate,
+                restCarryMeters: Double? = nil, restLateralMeters: Double? = nil,
+                searchAlongMeters: Double? = nil, searchLateralMeters: Double? = nil) {
         self.carryMeters = carryMeters
         self.lateralMeters = lateralMeters
         self.searchRadiusMeters = searchRadiusMeters
         self.target = target
+        self.restCarryMeters = restCarryMeters
+        self.restLateralMeters = restLateralMeters
+        self.searchAlongMeters = searchAlongMeters
+        self.searchLateralMeters = searchLateralMeters
+    }
+
+    /// Rest position (falls back to the landing point for older shots).
+    public var restCarry: Double { restCarryMeters ?? carryMeters }
+    public var restLateral: Double { restLateralMeters ?? lateralMeters }
+    public var rollMeters: Double {
+        ((restCarry - carryMeters) * (restCarry - carryMeters) + (restLateral - lateralMeters) * (restLateral - lateralMeters)).squareRoot()
     }
 }
 

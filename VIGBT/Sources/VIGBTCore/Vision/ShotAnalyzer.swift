@@ -42,6 +42,8 @@ public struct ShotAnalyzer: Sendable {
     public var tracker: BallTracker
     public var extractor: LaunchVectorExtractor
     public var estimator: LandingZoneEstimator
+    /// Reprojection fit used whenever the resting ball on the tee was seen (SPEC §12).
+    public var fitter: ReprojectionFitter = ReprojectionFitter()
     /// Candidates whose radius falls outside [min, max] × expected tee radius are discarded.
     /// The lower bound is generous because a ball flying away from the lens shrinks quickly.
     public var radiusGate: ClosedRange<Double>
@@ -67,21 +69,31 @@ public struct ShotAnalyzer: Sendable {
     public func analyze(frames: [[DetectionCandidate]], calibration: TeeCalibration,
                         referenceRadiusPixels: Double?, includeBallistics: Bool,
                         club: Club = .auto, spin: SpinEstimate? = nil, wind: Vector3 = .zero,
-                        zone: SearchZoneCalibration? = nil) -> ShotAnalysis {
+                        zone: SearchZoneCalibration? = nil, restingBall: DetectionCandidate? = nil) -> ShotAnalysis {
         let expected = referenceRadiusPixels ?? CameraPose.expectedBallRadiusPixels(calibration: calibration)
         let gated = frames.map { sizeGate($0, expectedRadius: expected) }
         let track = tracker.track(frames: gated)
         var result = ShotAnalysis(centroids: track)
         do {
-            let launch = try extractor.extract(centroids: track, calibration: calibration,
+            var launch = try extractor.extract(centroids: track, calibration: calibration,
                                                referenceRadiusPixels: referenceRadiusPixels)
+            var fittedSpin: SpinEstimate?
+            if let tee = restingBall {
+                // Refine with the tee-anchored reprojection fit; it also recovers the spin axis from curvature.
+                let prior = (spin ?? SpinEstimator.estimate(club: club, launchAngleDeg: launch.launchAngleDeg)).rpm
+                if let fit = fitter.fit(centroids: track, tee: (tee.centerX, tee.centerY), calibration: calibration,
+                                        initial: launch, spinPrior: prior) {
+                    launch = fit.launch
+                    fittedSpin = fit.spin
+                }
+            }
             guard launch.ballSpeed.isFinite, launch.ballSpeed > 3, launch.launchAngleDeg > -5 else {
                 result.failureReason = "The ball's launch could not be measured reliably. Please try again."
                 return result
             }
             result.launch = launch
             if includeBallistics {
-                let spin = spin ?? SpinEstimator.estimate(club: club, launchAngleDeg: launch.launchAngleDeg)
+                let spin = spin ?? fittedSpin ?? SpinEstimator.estimate(club: club, launchAngleDeg: launch.launchAngleDeg)
                 let est = estimator.estimate(launch: launch, calibration: calibration, spin: spin, wind: wind, zone: zone)
                 result.spin = est.spin
                 result.trajectory = est.trajectory
@@ -151,10 +163,21 @@ public enum Readout {
 
     public static func landing(_ l: LandingEstimate) -> String {
         let carry = Units.yards(fromMeters: l.carryMeters)
-        let lateral = Units.yards(fromMeters: l.lateralMeters)
-        let radius = Units.yards(fromMeters: l.searchRadiusMeters)
+        let restOut = Units.yards(fromMeters: l.restCarry)
+        let lateral = Units.yards(fromMeters: l.restLateral)
         let side = abs(lateral) < 2 ? "on line" : "\(whole(abs(lateral))) yards \(lateral > 0 ? "right" : "left")"
-        return "Estimated carry \(whole(carry)) yards, \(side). Search zone plus or minus \(whole(radius)) yards."
+        var text = "Estimated carry \(whole(carry)) yards."
+        if l.rollMeters >= Units.meters(fromYards: 2) {
+            text += " It should stop about \(whole(restOut)) yards out, \(side)."
+        } else {
+            text += " It should stop close to where it lands, \(side)."
+        }
+        if let a = l.searchAlongMeters, let c = l.searchLateralMeters {
+            text += " Search zone \(whole(Units.yards(fromMeters: a))) yards long and \(whole(Units.yards(fromMeters: c))) yards wide each way."
+        } else {
+            text += " Search zone plus or minus \(whole(Units.yards(fromMeters: l.searchRadiusMeters))) yards."
+        }
+        return text
     }
 
     /// Compact on-screen form, e.g. "152 yd".

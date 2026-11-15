@@ -92,7 +92,13 @@ struct StatsList: View {
             if let landing {
                 row("Carry", String(format: "%.0f yd", Units.yards(fromMeters: landing.carryMeters)))
                 row("Offline", direction(lateralYards: Units.yards(fromMeters: landing.lateralMeters)))
-                row("Search zone", String(format: "± %.0f yd", Units.yards(fromMeters: landing.searchRadiusMeters)))
+                row("Expected stop", String(format: "%.0f yd", Units.yards(fromMeters: landing.restCarry)))
+                if let a = landing.searchAlongMeters, let c = landing.searchLateralMeters {
+                    row("Search zone", String(format: "± %.0f yd long, ± %.0f yd wide",
+                                              Units.yards(fromMeters: a), Units.yards(fromMeters: c)))
+                } else {
+                    row("Search zone", String(format: "± %.0f yd", Units.yards(fromMeters: landing.searchRadiusMeters)))
+                }
             }
         }
         .font(.title3)
