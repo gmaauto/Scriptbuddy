@@ -51,7 +51,7 @@ final class ShotStore {
     var colorProfile: BallColorProfile {
         get {
             guard let data = defaults.data(forKey: "colorProfile"),
-                  let p = try? JSONDecoder().decode(BallColorProfile.self, from: data) else { return .neonOrange }
+                  let p = try? JSONDecoder().decode(BallColorProfile.self, from: data) else { return .neonPink } // recommended colour (SPEC Phase 4.5)
             return p
         }
         set { defaults.set(try? JSONEncoder().encode(newValue), forKey: "colorProfile") }

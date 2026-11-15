@@ -139,8 +139,11 @@ public struct HSVRange: Codable, Equatable, Sendable {
 }
 
 public enum BallColorPreset: String, Codable, CaseIterable, Sendable {
-    case neonOrange
+    /// Recommended (SPEC Phase 4.5): matte neon pink/magenta — furthest hue from grass, zero false positives measured.
     case neonPink
+    case neonOrange
+    /// Ordinary white ball: found by `WhiteBallDetector` (local contrast, shape, grass surround), not colour alone.
+    case white
     case sampled
 }
 
@@ -157,6 +160,11 @@ public struct BallColorProfile: Codable, Equatable, Sendable {
     public static let neonOrange = BallColorProfile(
         preset: .neonOrange,
         range: HSVRange(hueMin: 10, hueMax: 40, saturation: 0.55...1.0, value: 0.45...1.0))
+
+    /// Colour gate only; `WhiteBallDetector` adds the tests that separate a ball from sky, sand and lines.
+    public static let white = BallColorProfile(
+        preset: .white,
+        range: HSVRange(hueMin: 0, hueMax: 359.999, saturation: 0...0.22, value: 0.62...1.0))
 
     public static let neonPink = BallColorProfile(
         preset: .neonPink,

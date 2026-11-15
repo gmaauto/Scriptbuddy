@@ -91,10 +91,16 @@ public struct BlobDetector: Sendable {
     ///   - step: mask-to-source scale, so candidates come back in source pixel coordinates.
     public func detect(mask: [UInt8], width: Int, height: Int, color: [UInt8]? = nil,
                        step: Int = 1) -> [DetectionCandidate] {
+        detectWithArea(mask: mask, width: width, height: height, color: color, step: step).map { $0.candidate }
+    }
+
+    /// As `detect`, also returning each blob's pixel count (mask pixels) for fill-ratio tests.
+    public func detectWithArea(mask: [UInt8], width: Int, height: Int, color: [UInt8]? = nil,
+                               step: Int = 1) -> [(candidate: DetectionCandidate, area: Int)] {
         precondition(mask.count == width * height, "mask size mismatch")
         var visited = [Bool](repeating: false, count: mask.count)
         var stack: [Int] = []
-        var out: [DetectionCandidate] = []
+        var out: [(candidate: DetectionCandidate, area: Int)] = []
         let s = Double(max(1, step))
         for start in mask.indices where mask[start] != 0 && !visited[start] {
             visited[start] = true
@@ -127,12 +133,12 @@ public struct BlobDetector: Sendable {
             }
             guard area >= minArea, area <= maxArea else { continue }
             let n = Double(area)
-            out.append(DetectionCandidate(
+            out.append((DetectionCandidate(
                 centerX: (sumX / n + 0.5) * s,
                 centerY: (sumY / n + 0.5) * s,
                 width: Double(maxX - minX + 1) * s,
                 height: Double(maxY - minY + 1) * s,
-                colorMatchFraction: color == nil ? 0 : Double(colorCount) / n))
+                colorMatchFraction: color == nil ? 0 : Double(colorCount) / n), area))
         }
         return out
     }

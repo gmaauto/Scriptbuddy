@@ -1,9 +1,10 @@
 # Vision Impaired Golf Ball Tracker (VIGBT) — Master Technical & Commercial Specification
 
-Document version: 0.6.0 · Updated 2026-11-15 · Status: draft (not yet compiled or tested on a device)
+Document version: 0.7.0 · Updated 2026-11-15 · Status: draft (not yet compiled or tested on a device)
 
 | Version | Date | Changes |
 |---|---|---|
+| 0.7.0 | 2026-11-15 | Phase 4.5: white-ball detector and ball-colour recommendation |
 | 0.6.0 | 2026-11-15 | Versioning rules (§10); visual accessibility requirements (§11); low-vision ball highlight |
 | 0.5.0 | 2026-11-15 | Phase 5 built; Phase 4.4 learned search zone; §9 research |
 | 0.4.0 | 2026-11-15 | Phase 5 specified; §8 open-source policy; Apache-2.0 |
@@ -118,6 +119,60 @@ golfer to the ball with spatial audio and haptics.
    - **Limits:** both biases are capped at ±15% and the radius factor is held between 0.04 and 0.20 × carry.
    - **Effect:** the next prediction is shifted and its circle resized. A golfer who always lands 10% short
      and right is sent to the right place with a tighter circle, instead of the spec's fixed 8% radius.
+
+### Phase 4.5 — Ball colour recommendation and white-ball detection
+
+**Recommended ball: matte neon pink (magenta).** Matte neon orange is second choice. Avoid yellow or
+lime for camera finding.
+
+Each colour's detection mask was run against simulated pixels from typical course backgrounds (40,000
+samples per cell; reproduce with `tools/ball_color_analysis.py`). The figures are false-positive rates; lower is better.
+
+| Ball colour (mask) | Green grass | Dry grass | Autumn leaves / soil | Bunker sand | White things (sky, frost, daisies, lines) | Worst |
+|---|---|---|---|---|---|---|
+| **Neon pink / magenta** | 0.0% | 0.0% | 0.0% | 0.0% | 0.0% | **0.0%** |
+| Neon orange | 0.0% | 0.0% | 27.3% | 0.0% | 0.0% | 27.3% |
+| Optic yellow | 1.3% | 4.2% | 0.0% | 0.0% | 0.0% | 4.2% |
+| Lime / green | 8.6% | 0.0% | 0.0% | 0.0% | 0.0% | 8.6% |
+| White (colour only) | 0.0% | 0.0% | 0.0% | 23.3% | 100% | 100% |
+
+- **Why pink:** magenta is about 143° of hue away from grass, the furthest of any ball colour. Almost
+  nothing on a course is that colour, apart from occasional flowers.
+- **Orange's weakness:** it shares its hue with autumn leaves and bare soil.
+- **Yellow and lime:** too close to sunlit or dry grass.
+- **Matte finish:** a matte surface avoids glossy highlights, which show up as white specks that break
+  colour masks.
+- **Golfers' own eyes:** human vision depends on brightness contrast, not hue. Pink is only about 1.3:1
+  against grass in brightness, while optic yellow and white are about 3.9:1. A golfer who uses their own
+  remaining sight *without* the app may see yellow or white better. With the app, the ball highlight
+  (§11) repaints the ball in a 7:1 accent colour, so pink is the best choice overall.
+
+**White balls (`WhiteBallDetector`, built in 0.7.0).** For golfers who play ordinary white balls, a
+candidate must pass all four tests:
+
+1. **White:** saturation at most 0.22 and brightness at least 0.62.
+2. **Brighter than its surroundings:** at least 0.15 brighter than the average of a 25 × 25 area. This
+   removes sky, cloud and frost.
+3. **Round and solid:** aspect ratio 0.7 to 1.3, and at least 55% of its bounding circle filled. This
+   removes painted lines and clutter.
+4. **Grass all round:** at least half of the ring 1.6 to 2.6 radii out must be grass-coloured. This
+   removes balls on sand or cart paths, and stakes against the sky.
+
+Unit-tested scenes:
+
+| Scene | Expected |
+|---|---|
+| Ball on grass | Found |
+| Distant ball 3 px across | Found |
+| Ball next to a painted line | Ball found, line rejected |
+| Sky edge | Rejected |
+| Ball on sand | Rejected |
+| Ball on a cart path | Rejected |
+| Grey disc | Rejected |
+
+**Planned next step:** a small Core ML detector, combined with this heuristic. It would be trained only on
+datasets whose licence has been checked (for example MIT-licensed Roboflow golf-ball sets) and on footage
+we record ourselves. The heuristic stays as the fallback that needs no model.
 
 ### Phase 5 — Course & hole selection, club recommendation, course layout
 

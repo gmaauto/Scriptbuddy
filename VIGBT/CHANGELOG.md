@@ -6,6 +6,17 @@ All notable changes to VIGBT are recorded here. The format follows
 
 Versions before 1.0.0 are development builds that have not yet been compiled or tested on a device.
 
+## [0.7.0] - 2026-11-15
+
+### Added
+- White-ball detector (`WhiteBallDetector`, Phase 4.5). A candidate must be white, brighter than its neighbourhood, round and solid, and surrounded by grass, so sky, frost, painted lines, sand and cart paths are rejected. It is used for ground scanning, the ball highlight, and the ball on the tee before impact.
+- "White" ball colour option.
+- Ball-colour recommendation (SPEC Phase 4.5): matte neon pink/magenta, backed by measured false-positive rates. It is now the default colour.
+
+### Changed
+- `BlobDetector.detectWithArea` reports each blob's pixel count.
+- `shots.json` is now format 3, because shots can record the new white preset. Version 0.6.0 will keep the file untouched instead of misreading it.
+
 ## [0.6.0] - 2026-11-15
 
 ### Added

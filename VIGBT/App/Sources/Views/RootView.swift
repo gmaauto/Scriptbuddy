@@ -123,13 +123,20 @@ struct SetupView: View {
                 .multilineTextAlignment(.center)
                 .accessibilityAddTraits(.updatesFrequently)
             ChoiceRow(label: "Ball colour",
-                      options: [(BallColorPreset.neonOrange, "Orange"), (.neonPink, "Pink"), (.sampled, "Sampled")],
+                      options: [(BallColorPreset.neonPink, "Pink (best)"), (.neonOrange, "Orange"),
+                                (.white, "White"), (.sampled, "Sampled")],
                       selected: model.profile.preset) { preset in
                 switch preset {
                 case .neonOrange: model.profile = .neonOrange
                 case .neonPink: model.profile = .neonPink
+                case .white: model.profile = .white
                 case .sampled: model.sampleBallColor()
                 }
+            }
+            if model.profile.preset != .neonPink {
+                Text("Tip: a matte neon pink ball is the easiest for VIGBT to find. White balls work, but are harder to tell from sand, lines and sky.")
+                    .font(.callout)
+                    .foregroundStyle(Palette.secondaryText)
             }
             BigButton(title: "Sample ball colour", hint: "Point the centre of the camera at the ball first", prominent: false) {
                 model.sampleBallColor()

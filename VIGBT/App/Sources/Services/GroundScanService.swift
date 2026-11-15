@@ -28,14 +28,15 @@ final class GroundScanService: NSObject, AVCaptureVideoDataOutputSampleBufferDel
     private var configured = false
     private var focalLengthPixels: Double = 1500
     private let lock = NSLock()
-    private var range: HSVRange?
+    private var profile: BallColorProfile?
+    private let whiteDetector = WhiteBallDetector()
     private let scorer = FusionScorer()
     /// Processing step: 2 → 960×540 masks, plenty for a ball within ~10 m.
     private let step = 2
 
     func start(profile: BallColorProfile) {
         lock.lock()
-        range = profile.range
+        self.profile = profile
         lock.unlock()
         sessionQueue.async {
             do {
@@ -95,30 +96,37 @@ final class GroundScanService: NSObject, AVCaptureVideoDataOutputSampleBufferDel
     func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
         guard let pixels = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
         lock.lock()
-        let range = self.range
+        let profile = self.profile
         lock.unlock()
-        guard let range else { return }
+        guard let profile else { return }
 
         CVPixelBufferLockBaseAddress(pixels, .readOnly)
         let w = CVPixelBufferGetWidth(pixels)
         let h = CVPixelBufferGetHeight(pixels)
         let bpr = CVPixelBufferGetBytesPerRow(pixels)
         var masks: FrameMasks?
+        var best: DetectionCandidate?
         if let base = CVPixelBufferGetBaseAddress(pixels) {
-            masks = FrameMasks.build(bgra: UnsafeRawBufferPointer(start: base, count: bpr * h),
-                                     width: w, height: h, bytesPerRow: bpr, step: step, range: range)
+            let bytes = UnsafeRawBufferPointer(start: base, count: bpr * h)
+            if profile.preset == .white {
+                // White balls: colour alone matches sky, sand and lines, so use the dedicated detector.
+                let r = whiteDetector.detect(bgra: bytes, width: w, height: h, bytesPerRow: bpr, step: step)
+                masks = r.masks
+                best = r.candidates.first
+            } else {
+                let m = FrameMasks.build(bgra: bytes, width: w, height: h, bytesPerRow: bpr, step: step, range: profile.range)
+                masks = m
+                best = BlobDetector(minArea: 3, maxArea: m.width * m.height / 8)
+                    .detect(mask: m.color, width: m.width, height: m.height, color: m.color, step: step)
+                    .compactMap { b -> (DetectionCandidate, Double)? in
+                        guard let circ = scorer.circularity(of: b) else { return nil }
+                        return (b, circ * b.radiusPixels)
+                    }
+                    .max { $0.1 < $1.1 }?.0
+            }
         }
         CVPixelBufferUnlockBaseAddress(pixels, .readOnly)
         guard let masks else { return }
-
-        let blobs = BlobDetector(minArea: 3, maxArea: masks.width * masks.height / 8)
-            .detect(mask: masks.color, width: masks.width, height: masks.height, color: masks.color, step: step)
-        let best = blobs
-            .compactMap { b -> (DetectionCandidate, Double)? in
-                guard let circ = scorer.circularity(of: b) else { return nil }
-                return (b, circ * b.radiusPixels)
-            }
-            .max { $0.1 < $1.1 }?.0
 
         var detection: GroundDetection?
         if let b = best {

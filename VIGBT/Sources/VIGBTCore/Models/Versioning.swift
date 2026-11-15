@@ -4,16 +4,17 @@ import Foundation
 /// the top entry of `CHANGELOG.md` and the `SPEC.md` document version. `VersioningTests` and
 /// `tools/check_version.sh` enforce this. Versioning follows Semantic Versioning 2.0.0.
 public enum VIGBTVersion {
-    public static let string = "0.6.0"
+    public static let string = "0.7.0"
     /// Monotonic build number (`CURRENT_PROJECT_VERSION`); +1 on every release.
-    public static let build = 6
+    public static let build = 7
 }
 
 /// Format versions of every file VIGBT writes. Bump a number whenever that file's JSON shape changes
 /// in a way an older app could not read, and add a migration in `DataFormat.decode`.
 public enum DataFormat {
-    /// `shots.json` — v1: bare `[ShotRecord]` (≤ 0.5.0); v2: versioned envelope (0.6.0).
-    public static let shots = 2
+    /// `shots.json` — v1: bare `[ShotRecord]` (≤ 0.5.0); v2: versioned envelope (0.6.0);
+    /// v3: may contain the `.white` ball preset (0.7.0), which 0.6.0 cannot decode, so it keeps the file locked.
+    public static let shots = 3
     /// `quota.json`
     public static let quota = 2
     /// Course packages in `Courses/*.json` — v1: bare `GolfCourse`; v2: envelope.

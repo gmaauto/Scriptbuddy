@@ -52,7 +52,10 @@ enum ClipAnalysisService {
             guard let pixels = CMSampleBufferGetImageBuffer(sample) else { continue }
             let masks = buildMasks(pixels, range: profile?.range)
 
-            if offset <= -2, profile != nil {
+            if offset <= -2, profile?.preset == .white {
+                // White ball on the tee: colour alone also matches sky and tee markers.
+                if let r = whiteRestingRadius(pixels, expected: expectedRadius) { restingRadii.append(r) }
+            } else if offset <= -2, profile != nil {
                 // Resting ball on the tee: the best round, colour-matched blob near the expected size.
                 let still = blobs.detect(mask: masks.color, width: masks.width, height: masks.height, color: masks.color)
                 if let ball = still
@@ -76,6 +79,20 @@ enum ClipAnalysisService {
                                               referenceRadiusPixels: reference, includeBallistics: includeBallistics,
                                               club: club, zone: zone)
         return Output(analysis: analysis, referenceRadiusPixels: reference)
+    }
+
+    private static func whiteRestingRadius(_ pixels: CVPixelBuffer, expected: Double) -> Double? {
+        CVPixelBufferLockBaseAddress(pixels, .readOnly)
+        defer { CVPixelBufferUnlockBaseAddress(pixels, .readOnly) }
+        guard let base = CVPixelBufferGetBaseAddress(pixels) else { return nil }
+        let h = CVPixelBufferGetHeight(pixels), bpr = CVPixelBufferGetBytesPerRow(pixels)
+        var detector = WhiteBallDetector()
+        detector.minArea = 2
+        let r = detector.detect(bgra: UnsafeRawBufferPointer(start: base, count: bpr * h),
+                                width: CVPixelBufferGetWidth(pixels), height: h, bytesPerRow: bpr, step: 1)
+        return r.candidates
+            .first { $0.radiusPixels >= 0.4 * expected && $0.radiusPixels <= 2.5 * expected }?
+            .radiusPixels
     }
 
     private static func buildMasks(_ pixels: CVPixelBuffer, range: HSVRange?) -> FrameMasks {
