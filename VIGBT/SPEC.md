@@ -94,6 +94,90 @@ golfer to the ball with spatial audio and haptics.
 3. **Haptics:** double-tap when the ball enters view; Geiger ticks that speed up as the ball is centred;
    confirmation tone + `.success` when centred within 2 m.
 
+### Phase 5 — Course & hole selection, club recommendation, course layout
+
+**Goal:** the golfer plays a real round. They pick the course and the hole they start on (a regular,
+back-nine or shotgun start), and at every shot the app says the distance to the pin and recommends a club.
+
+1. **Course selection.**
+   - **Course picker:** courses near the current GPS position, sorted by distance, with search by name. Also
+     a list of recently played courses, which works offline.
+   - **Course data:** each hole's tee boxes, green (front, centre and back), pin, fairway outline and
+     hazards (bunkers, water, out of bounds), plus par and stroke index.
+   - **Data sources, in order of preference:**
+     - a course package downloaded once and then cached on the device (for example built from
+       OpenStreetMap `golf=*` features: `golf=hole`, `tee`, `green`, `pin`, `fairway`, `bunker`,
+       `water_hazard`);
+     - a GeoJSON or GPX file the user imports;
+     - **marking the course in person:** stand on each tee and on each green and press "Mark tee" and
+       "Mark green". This needs no data at all.
+   - **Offline principle:** downloading a course is the only network use, and it happens once. There is no
+     backend and no recurring cost, so §1's on-device principle still holds. Playing a cached course needs
+     no signal.
+   - **Pin position:** the green centre is the default. The golfer or a helper can set today's pin by
+     standing next to the hole and pressing "Set pin here", or by choosing front, centre or back.
+
+2. **Starting hole and hole tracking.**
+   - **Choose the starting hole:** 1–18, defaulting to 1. Choosing 10 is a back-nine start; any hole works
+     for a shotgun start. Play wraps from 18 to 1.
+   - **Choose the tee set:** for example white, yellow or red. This sets the hole length that is read out.
+   - **Moving to the next hole:** when the golfer is within 25 m of the next hole's tee box and the current
+     hole's ball has been found or the hole is marked done, the app asks, "Hole 5. Are you on the tee?"
+     **Next hole** and **Previous hole** buttons are always available, and every hole change is announced.
+   - **Calibration:** the tee GPS fix replaces the course's stored tee position for that shot. The bearing
+     from the tee to the pin gives the intended target line.
+
+3. **Distance to the pin and club recommendation.**
+   - **Distance:** the distance to the pin comes from the current position: the tee for a tee shot, or the
+     found ball position after Phase 4. Front, centre and back distances to the green are also available.
+   - **Club distances:** each golfer has a personal carry distance per club, learned from their own tracked
+     shots. It uses a rolling median of the last 10 shots per club and starts from age- and
+     handicap-based defaults that the golfer can edit.
+   - **Picking the club:** the recommended club has the smallest median carry that is at least the plays-like
+     distance minus a short-side margin of 5 yards.
+   - **Plays-like distance:** the distance adjusted for elevation (1 yard per metre of rise, when the
+     course package has elevation) and for wind, if the golfer enters it.
+   - **Tee shots on long holes:** when the distance to the pin is longer than the longest club, the app
+     recommends the longest club that keeps the median landing point at least 10 yards short of any hazard
+     crossing the centre line.
+   - **Readout:** spoken and shown on screen, for example: "152 yards to the pin. Plays 158. Recommended:
+     7-iron. Your 7-iron carries 155." Alternatives one club either side are listed below.
+   - **Feeding into the shot:** the recommended club becomes the selected club for spin estimation (§6
+     note 3). The golfer can override it before the shot, and the override is what gets recorded.
+   - **Finer club list:** this needs a more detailed list than today's spin categories: Driver, 3W, 5W, 7W,
+     hybrids (2–5), irons (3–9), PW, GW, SW and LW. Each maps to a spin category in `Club`.
+   - **Alignment aid:** at address, the spatial-audio beacon (Phase 3.2) can be placed on the pin's bearing
+     to help the golfer aim, then switched off before the swing so it does not set off the impact trigger.
+
+4. **Course layout screen.**
+   - **Opening it:** a **Course layout** button is on the Ready, Replay, Walk and Homing screens. It opens a
+     full-screen view of the current hole. Opening it does not stop any running guidance: the beacon,
+     milestone callouts and homing haptics keep going.
+   - **Visual view:** a MapKit satellite or high-contrast map, rotated so the tee is at the bottom and the
+     green at the top. Overlays in thick, high-contrast colours show:
+     - the tee;
+     - the fairway outline;
+     - hazards, in a distinct colour and pattern;
+     - the green and pin;
+     - the golfer's position;
+     - the predicted landing point with its search circle (Phase 2);
+     - the tracked ball path.
+   - **Non-visual view:** VoiceOver reads an ordered description of the hole, from the tee to the green, for
+     example: "Hole 4, par 4, 380 yards, stroke index 7. Fairway bends right at 230 yards. Bunker on the
+     right from 215 to 240 yards. Water short left of the green at 340 yards. Green 28 yards deep." Each
+     feature is its own accessibility element, with its distance from the golfer's current position.
+   - **Return button:** a **Return** button, at least 64 pt high and fixed at the bottom, closes the layout.
+     It brings back exactly the screen and state the golfer left, and reads that screen's title. The VoiceOver
+     escape gesture (two-finger Z) does the same.
+
+5. **Round flow and scoring (optional).** Each recorded shot is attached to its hole. A hole summary is
+   spoken when the golfer moves to the next hole, for example: "Hole 4: 3 shots tracked, last ball found 12
+   yards short of the green." Full scorecard entry is out of scope for this phase.
+
+6. **Proposed tiers (open product decision).**
+   - **Free:** course and hole selection, the layout screen, and distance to the pin.
+   - **Pro:** club recommendation and learned club distances, which depend on Phase 2 carry tracking.
+
 ## 5. Data Models (Core Swift Contracts)
 
 All contracts live in the `VIGBTCore` Swift package (`VIGBT/Sources/VIGBTCore`). The package is
@@ -129,6 +213,15 @@ on macOS, the iOS Simulator and Linux CI. The iOS app layer adapts framework typ
 | `NavigationGuidance` | Phase 3 tick | `distanceRemainingMeters`, `headingErrorDeg`, `alignment`, `pulseIntervalSeconds`, `beaconRight/Forward`, `pitchShiftCents`, `milestones`, `hasArrived` |
 | `GroundDetection`, `HomingEvent` | Phase 4 I/O | normalized centre offset + depth → `.peripheralDetected`, `.tick`, `.lost`, `.locked` |
 | `EntitlementTier`, `Feature`, `ShotQuota` | Section 2.1 gating | free-tier daily counter (3/day), feature matrix |
+| `GolfCourse` | Phase 5.1 course package (Codable, cached offline) | `id`, `name`, `location`, `holes`, `source` (`.download`, `.imported`, `.marked`), `updatedAt` |
+| `Hole` | One hole | `number`, `par`, `strokeIndex`, `tees: [TeeBox]`, `green: GreenGeometry`, `pin: GeoCoordinate?`, `centerline: [GeoCoordinate]`, `fairway: [GeoCoordinate]`, `hazards: [Hazard]` |
+| `TeeBox` | Tee set position | `name` (e.g. "White"), `coordinate`, `lengthMeters` |
+| `GreenGeometry` | Green targets | `front`, `center`, `back` coordinates, `outline`, optional `elevationMeters` |
+| `Hazard` | Layout feature | `kind` (`.bunker`, `.water`, `.outOfBounds`, `.trees`), `outline: [GeoCoordinate]`, derived carry-in / carry-out distances along the centre line |
+| `RoundState` | Current round (persisted) | `course`, `teeSetName`, `startingHole`, `currentHole`, `holesPlayed`, `shotIDs` per hole |
+| `ClubBag` / `ClubStats` | Phase 5.3 learned distances | specific club (Driver … LW) → `spinCategory: Club`, `medianCarryMeters`, `sampleCount`, `isUserEdited` |
+| `ClubRecommendation` | Phase 5.3 output | `distanceToPinMeters`, `playsLikeMeters`, `recommended`, `alternatives`, `reason`, spoken `readout` |
+| `HoleDescription` | Phase 5.4 non-visual layout | ordered `[LayoutFeature]` (kind, side, from/to distance) → spoken text |
 
 ### 5.3 Services (pure logic, in `VIGBTCore`)
 
@@ -143,6 +236,10 @@ on macOS, the iOS Simulator and Linux CI. The iOS app layer adapts framework typ
 | `PositionKalmanFilter`, `NavigationEngine` | Phase 3 |
 | `HomingController` | Phase 4 |
 | `EntitlementGate` | Section 2.1 |
+| `CourseLocator`: nearest courses to a GPS fix; matches a GPS fix to a tee box to detect the next hole | Phase 5.1–5.2 |
+| `HoleGeometry`: distances to the pin and front/centre/back of the green, hazard carry distances along the centre line, layout rotation angle | Phase 5.2–5.4 |
+| `ClubAdvisor`: plays-like distance, smallest-club-that-reaches rule, hazard lay-up rule, rolling median learned from `ShotRecord`s | Phase 5.3 |
+| `HoleDescriber`: hole geometry → ordered spoken description with distances relative to the golfer | Phase 5.4 |
 
 ## 6. Engineering Review Notes (decisions and corrections to the original draft)
 
@@ -199,6 +296,14 @@ Info.plist additions beyond §2.2: `NSMotionUsageDescription` (the pedometer nee
 `UIBackgroundModes` `audio` + `location` (guidance keeps running with the screen locked; App Review will
 ask for this justification). `VIGBT.storekit` lets the purchase be tested in the simulator and on a device
 without App Store Connect.
+
+**Phase 5 UI (specified, not yet built).**
+- **New screens:** Course picker, Round setup (tee set and starting hole), and a Hole header on the
+  Ready / Walk / Homing screens showing the hole number, par, distance to the pin and recommended club.
+  The club picker defaults to the recommendation.
+- **Course layout:** a full-screen sheet with the **Return** button. While it is open, `AppModel.phase` does
+  not change, so closing it restores the previous screen and all guidance keeps running underneath.
+- **New services:** `CourseService` (download and import), with the cache stored next to `ShotStore`.
 
 **Simulated shot.** `ShotSimulator` (core) generates a physically consistent calibration and per-frame
 detections, including the vacated tee spot and club-head distractors, from a random launch. The whole
