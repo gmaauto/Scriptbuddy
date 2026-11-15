@@ -2,3 +2,5 @@
 .swiftpm/
 DerivedData/
 *.xcuserstate
+App/VIGBT.xcodeproj/
+App/Sources/Info.plist

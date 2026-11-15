@@ -26,3 +26,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: swift test
+
+  ios-app:
+    runs-on: macos-14
+    defaults:
+      run:
+        working-directory: VIGBT/App
+    steps:
+      - uses: actions/checkout@v4
+      - run: brew install xcodegen
+      - run: xcodegen generate
+      - name: Build for device (unsigned)
+        run: |
+          xcodebuild -project VIGBT.xcodeproj -scheme VIGBT \
+            -destination 'generic/platform=iOS' \
+            CODE_SIGNING_ALLOWED=NO build | tail -50
+          exit ${PIPESTATUS[0]}

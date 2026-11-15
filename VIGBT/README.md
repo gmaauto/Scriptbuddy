@@ -21,6 +21,13 @@ cd VIGBT
 swift test
 ```
 
-To use the package in the iOS app target, add it in Xcode with **File → Add Package Dependencies → Add Local…**.
-The AVFoundation, ARKit, Vision, StoreKit and CoreHaptics adapters belong in the app target; they are listed
-in SPEC.md §7.
+## iOS app
+
+```bash
+brew install xcodegen
+cd VIGBT/App && xcodegen && open VIGBT.xcodeproj
+```
+
+Run it on a LiDAR iPhone (12 Pro or newer Pro model); the simulator has no camera or LiDAR. Set your
+development team under Signing & Capabilities. `VIGBT.storekit` is wired into the scheme, so the Pro
+purchase can be tested locally. See SPEC.md §7 for what each file does.

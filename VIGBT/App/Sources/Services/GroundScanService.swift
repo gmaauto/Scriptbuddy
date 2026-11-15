@@ -1,0 +1,118 @@
+import AVFoundation
+import VIGBTCore
+
+/// Phase 4.1–4.2: rear Wide camera at 1080p60 with continuous autofocus and auto torch, scanning
+/// each frame with the active colour profile for a round, ball-sized blob.
+final class GroundScanService: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, @unchecked Sendable {
+    let session = AVCaptureSession()
+    /// Called on the main queue for every processed frame (nil = no ball in view).
+    var onDetection: (@MainActor (GroundDetection?) -> Void)?
+
+    private let sessionQueue = DispatchQueue(label: "vigbt.scan.session")
+    private let videoQueue = DispatchQueue(label: "vigbt.scan.video", qos: .userInitiated)
+    private let output = AVCaptureVideoDataOutput()
+    private var configured = false
+    private var focalLengthPixels: Double = 1500
+    private let lock = NSLock()
+    private var range: HSVRange?
+    private let scorer = FusionScorer()
+    /// Processing step: 2 → 960×540 masks, plenty for a ball within ~10 m.
+    private let step = 2
+
+    func start(profile: BallColorProfile) {
+        lock.lock()
+        range = profile.range
+        lock.unlock()
+        sessionQueue.async {
+            do {
+                try self.configureIfNeeded()
+            } catch {
+                return
+            }
+            if !self.session.isRunning { self.session.startRunning() }
+        }
+    }
+
+    func stop() {
+        sessionQueue.async {
+            if self.session.isRunning { self.session.stopRunning() }
+        }
+    }
+
+    private func configureIfNeeded() throws {
+        guard !configured else { return }
+        guard let dev = AVCaptureDevice.default(.builtInWideAngleCamera, for: .video, position: .back) else {
+            throw CaptureError.noCamera
+        }
+        session.beginConfiguration()
+        defer { session.commitConfiguration() }
+        session.sessionPreset = .inputPriority
+        let input = try AVCaptureDeviceInput(device: dev)
+        guard session.canAddInput(input) else { throw CaptureError.noCamera }
+        session.addInput(input)
+
+        let format = dev.formats.first { f in
+            let d = CMVideoFormatDescriptionGetDimensions(f.formatDescription)
+            return d.width == 1920 && d.height == 1080 && f.videoSupportedFrameRateRanges.contains { $0.maxFrameRate >= 60 }
+        }
+        try dev.lockForConfiguration()
+        if let format {
+            dev.activeFormat = format
+            dev.activeVideoMinFrameDuration = CMTime(value: 1, timescale: 60)
+            dev.activeVideoMaxFrameDuration = CMTime(value: 1, timescale: 60)
+        }
+        if dev.isFocusModeSupported(.continuousAutoFocus) { dev.focusMode = .continuousAutoFocus }
+        if dev.isExposureModeSupported(.continuousAutoExposure) { dev.exposureMode = .continuousAutoExposure }
+        if dev.hasTorch, dev.isTorchModeSupported(.auto) { dev.torchMode = .auto } // torch assist in low light
+        dev.unlockForConfiguration()
+
+        output.videoSettings = [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA]
+        output.alwaysDiscardsLateVideoFrames = true
+        output.setSampleBufferDelegate(self, queue: videoQueue)
+        guard session.canAddOutput(output) else { throw CaptureError.noCamera }
+        session.addOutput(output)
+
+        let dims = CMVideoFormatDescriptionGetDimensions(dev.activeFormat.formatDescription)
+        let fov = Units.radians(Double(dev.activeFormat.videoFieldOfView))
+        focalLengthPixels = (Double(dims.width) / 2) / tan(fov / 2)
+        configured = true
+    }
+
+    func captureOutput(_ output: AVCaptureOutput, didOutput sampleBuffer: CMSampleBuffer, from connection: AVCaptureConnection) {
+        guard let pixels = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
+        lock.lock()
+        let range = self.range
+        lock.unlock()
+        guard let range else { return }
+
+        CVPixelBufferLockBaseAddress(pixels, .readOnly)
+        let w = CVPixelBufferGetWidth(pixels)
+        let h = CVPixelBufferGetHeight(pixels)
+        let bpr = CVPixelBufferGetBytesPerRow(pixels)
+        var masks: FrameMasks?
+        if let base = CVPixelBufferGetBaseAddress(pixels) {
+            masks = FrameMasks.build(bgra: UnsafeRawBufferPointer(start: base, count: bpr * h),
+                                     width: w, height: h, bytesPerRow: bpr, step: step, range: range)
+        }
+        CVPixelBufferUnlockBaseAddress(pixels, .readOnly)
+        guard let masks else { return }
+
+        let blobs = BlobDetector(minArea: 3, maxArea: masks.width * masks.height / 8)
+            .detect(mask: masks.color, width: masks.width, height: masks.height, color: masks.color, step: step)
+        let best = blobs
+            .compactMap { b -> (DetectionCandidate, Double)? in
+                guard let circ = scorer.circularity(of: b) else { return nil }
+                return (b, circ * b.radiusPixels)
+            }
+            .max { $0.1 < $1.1 }?.0
+
+        var detection: GroundDetection?
+        if let b = best {
+            let distance = focalLengthPixels * 0.021335 / b.radiusPixels
+            detection = GroundDetection(offsetX: (b.centerX / Double(w)) * 2 - 1,
+                                        offsetY: (b.centerY / Double(h)) * 2 - 1,
+                                        distanceMeters: distance)
+        }
+        Task { @MainActor in self.onDetection?(detection) }
+    }
+}

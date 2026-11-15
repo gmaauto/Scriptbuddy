@@ -176,16 +176,32 @@ on macOS, the iOS Simulator and Linux CI. The iOS app layer adapts framework typ
 7. **Homing lock debounce.** `.locked` requires 6 consecutive centred frames within 2 m (LiDAR depth at the
    centroid), which rejects single-frame false positives such as divots and leaves.
 
-## 7. Remaining iOS integration work (not in `VIGBTCore`)
+## 7. iOS app layer (`VIGBT/App`)
 
-- `CaptureService`: `AVCaptureSession` with Ultra-Wide 1080p120, HEVC rolling segments, `AVAudioEngine` tap
-  → `ImpactDetector`, export of `ClipWindow`, then stop the session.
-- `CalibrationService`: ARKit raycast to the tee and the ground plane → `TeeCalibration`; CoreMotion gravity
-  for pitch and roll; heading from `CLLocationManager.heading.trueHeading`.
-- `DetectionService`: vImage RGB→HSV + mask, frame differencing, `VNDetectContoursRequest` →
-  `[DetectionCandidate]`.
-- `ReplayView`: `AVPlayer` at 0.25× rate with a `Canvas` overlay of `TrackedCentroid`s.
-- `AudioBeaconService`: `AVAudioEnvironmentNode` + `AVAudioUnitTimePitch`, driven by `NavigationGuidance`.
-- `HapticsService`: CoreHaptics patterns for each `HomingEvent`.
-- `StoreService`: StoreKit 2 `Product.products`, `purchase()`, `Transaction.updates` and
-  `currentEntitlements` → `EntitlementTier`.
+The app target is defined in `App/project.yml`. Generate it with XcodeGen
+(`brew install xcodegen && cd VIGBT/App && xcodegen`). It depends on `VIGBTCore` as a local package.
+
+| File | Role |
+|---|---|
+| `Services/CaptureService.swift` | Ultra-Wide 1080p120 (falls back to Wide), stabilization off, distortion correction on, 1/2000 s shutter locked after auto-exposure settles. Rolling 1 s HEVC segments in a `RingBuffer`. `AVAudioEngine` tap → `ImpactDetector` in 5 ms blocks, minus the acoustic delay `D_tee/343`. After T0 + 3.5 s: stop the session, stitch the overlapping segments and export the clip. |
+| `Services/ClipAnalysisService.swift` | `AVAssetReader` decodes T0 − 8 … T0 + 20 frames as BGRA → `FrameMasks` → resting-ball radius from colour blobs before impact, motion blobs after it → `ShotAnalyzer`. |
+| `Services/CalibrationService.swift` | ARKit `.gravityAndHeading` + `.sceneDepth`. Centre raycast gives optical-axis depth; pitch, roll and true-north heading come from the camera transform. Locks when 10 readings agree within 3 cm. Tap-to-sample reads a 15×15 YCbCr patch. |
+| `Services/LocationService.swift` | GPS, true heading and `CMPedometer` → `PositionKalmanFilter`. Keeps working in the background with the screen locked. |
+| `Services/FeedbackServices.swift` | Speech (VoiceOver announcements when VoiceOver is running), audio session modes, `AVAudioEnvironmentNode` HRTF beacon (mono ping, pitch-shifted when off-line), CoreHaptics Geiger ticks. |
+| `Services/GroundScanService.swift` | Wide camera at 1080p60, continuous AF, auto torch. Colour mask at half resolution → round blob → `GroundDetection`, with distance from apparent size. |
+| `Services/StoreService.swift` | StoreKit 2: product, purchase, restore, `Transaction.updates` / `currentEntitlements` → `EntitlementTier`. |
+| `Services/ShotStore.swift` | On-device JSON persistence of shots (last 30, with clips), free-tier quota, disclaimer and colour profile. |
+| `App/AppModel.swift` | The state machine. Powers only the current phase's hardware and pauses recording when the phone gets too hot. |
+| `Views/*` | High-contrast SwiftUI screens with 64 pt buttons, headers and spoken status. Replay draws a Catmull–Rom tracer and the exit arrow over a 0.25× looping player. |
+
+Info.plist additions beyond §2.2: `NSMotionUsageDescription` (the pedometer needs it) and
+`UIBackgroundModes` `audio` + `location` (guidance keeps running with the screen locked; App Review will
+ask for this justification). `VIGBT.storekit` lets the purchase be tested in the simulator and on a device
+without App Store Connect.
+
+**Not yet verified on hardware:**
+- 1080p120 availability on the Ultra-Wide of each supported model.
+- That the sensor-native buffer orientation matches ARKit's camera axes (both are landscape-right; the
+  pitch/roll derivation relies on this).
+- The motion/colour thresholds on real grass and in real light.
+- `CLHeading` behaviour when the phone is held upright rather than flat.
