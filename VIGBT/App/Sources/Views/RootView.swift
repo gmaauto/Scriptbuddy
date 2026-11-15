@@ -16,7 +16,12 @@ struct RootView: View {
         @Bindable var model = model
         ZStack {
             Palette.background.ignoresSafeArea()
-            content
+            VStack(spacing: 0) {
+                if !model.needsOnboarding, model.round.isActive {
+                    HoleHeader()
+                }
+                content
+            }
         }
         .foregroundStyle(Palette.text)
         .sheet(isPresented: $model.showPaywall) { PaywallView() }
@@ -153,6 +158,7 @@ struct SetupView: View {
                 SimulatedShotButton()
                 HistoryButton()
             }
+            CourseButton()
         }
         .padding()
         .onAppear {

@@ -27,11 +27,18 @@ final class AppModel {
     var club: Club {
         didSet { store.club = club }
     }
+    /// The specific club in hand (Phase 5.3). Setting it also sets the spin category.
+    var bagClub: BagClub? {
+        didSet { if let b = bagClub { club = b.spinCategory } }
+    }
+    /// True once the golfer picks a club by hand; the recommendation then stops overriding it until the next shot.
+    @ObservationIgnored var clubOverridden = false
 
     // MARK: Services
     let storeService = StoreService()
     let calibrationService = CalibrationService()
     let location = LocationService()
+    let round = RoundModel()
     @ObservationIgnored let capture = CaptureService()
     @ObservationIgnored let scanner = GroundScanService()
     @ObservationIgnored let store = ShotStore()
@@ -171,18 +178,23 @@ final class AppModel {
         let profile = profile
         let club = club
         let ballistics = gate.isEnabled(.ballisticEstimation)
+        let zone = SearchZoneModel.calibration(for: club, shots: store.shots)
         analysisTask = Task {
             do {
                 let out = try await Task.detached(priority: .userInitiated) {
                     try await ClipAnalysisService.analyze(clip: clip, calibration: cal, profile: profile,
-                                                          includeBallistics: ballistics, club: club)
+                                                          includeBallistics: ballistics, club: club, zone: zone)
                 }.value
                 let a = out.analysis
                 let shot = ShotRecord(ballProfile: profile, calibration: cal, centroids: a.centroids,
                                       launch: a.launch, spin: a.spin, trajectory: a.trajectory,
                                       landing: a.landing, clipFileName: clip.url.lastPathComponent, club: club,
-                                      clipImpactTime: clip.impactTime, clipFrameRate: clip.frameRate)
+                                      clipImpactTime: clip.impactTime, clipFrameRate: clip.frameRate,
+                                      bagClub: bagClub, holeNumber: round.state?.currentHole)
                 store.add(shot)
+                round.record(shot: shot)
+                round.learn(from: store.shots)
+                clubOverridden = false
                 present(shot, analysis: a, clipURL: clip.url)
             } catch {
                 report(error)
@@ -225,7 +237,8 @@ final class AppModel {
         calibration = sim.calibration
         let shot = ShotRecord(ballProfile: profile, calibration: sim.calibration, centroids: a.centroids,
                               launch: a.launch, spin: a.spin, trajectory: a.trajectory, landing: a.landing,
-                              club: club, clipFrameRate: 120, isSimulated: true)
+                              club: club, clipFrameRate: 120, isSimulated: true, bagClub: bagClub,
+                              holeNumber: round.state?.currentHole)
         store.add(shot)
         present(shot, analysis: a, clipURL: nil)
     }
@@ -319,6 +332,12 @@ final class AppModel {
     }
 
     func ballFound() {
+        // Ground truth for the learned search zone, and the start point for the next club recommendation.
+        if var shot = currentShot, shot.isSimulated != true, let p = currentPosition {
+            shot.foundLocation = p
+            store.update(shot)
+            currentShot = shot
+        }
         scanner.stop()
         haptics.stopTicking()
         beacon.playSuccessChime()
@@ -359,7 +378,16 @@ final class AppModel {
         capture.onImpact = { [weak self] in self?.impactDetected() }
         capture.onClip = { [weak self] in self?.clipReady($0) }
         scanner.onDetection = { [weak self] in self?.groundDetection($0) }
-        location.onUpdate = { [weak self] in self?.navigationTick() }
+        location.onUpdate = { [weak self] in
+            guard let self else { return }
+            self.navigationTick()
+            if let p = self.currentPosition { self.round.update(position: p) }
+        }
+        round.speak = { [weak self] in self?.speak($0) }
+        round.onRecommendedClub = { [weak self] club in
+            guard let self, !self.clubOverridden else { return }
+            self.bagClub = club
+        }
         calibrationService.onStable = { [weak self] d in
             self?.haptics.confirm()
             self?.speak(String(format: "Tee distance %.1f metres. Locked. Press Start.", d))
@@ -367,6 +395,13 @@ final class AppModel {
         thermalObserver = NotificationCenter.default.addObserver(
             forName: ProcessInfo.thermalStateDidChangeNotification, object: nil, queue: .main) { [weak self] _ in
             Task { @MainActor in self?.thermalChanged() }
+        }
+    }
+
+    /// Best current position: the smoothed walking position, else the latest GPS fix.
+    var currentPosition: GeoCoordinate? {
+        location.smoothedPosition ?? location.lastFix.map {
+            GeoCoordinate(latitude: $0.coordinate.latitude, longitude: $0.coordinate.longitude)
         }
     }
 
@@ -384,6 +419,11 @@ final class AppModel {
         let msg = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
         errorMessage = msg
         speak(msg, interrupt: true)
+    }
+
+    /// For views that need to read something aloud (e.g. the hole description).
+    func speakText(_ text: String) {
+        speak(text, interrupt: true)
     }
 
     private func speak(_ text: String, interrupt: Bool = false) {

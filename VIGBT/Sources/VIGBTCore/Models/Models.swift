@@ -341,13 +341,20 @@ public struct ShotRecord: Codable, Identifiable, Equatable, Sendable {
     public var clipImpactTime: Double?
     public var clipFrameRate: Double?
     public var isSimulated: Bool?
+    /// The specific club hit (Phase 5.3), used to learn the golfer's carry distances.
+    public var bagClub: BagClub?
+    /// Hole the shot was played on during a round (Phase 5.2).
+    public var holeNumber: Int?
+    /// Where the ball was actually found (Phase 4 lock position). Ground truth for `SearchZoneModel`.
+    public var foundLocation: GeoCoordinate?
 
     public init(id: UUID = UUID(), capturedAt: Date = Date(), ballProfile: BallColorProfile,
                 calibration: TeeCalibration, centroids: [TrackedCentroid] = [],
                 launch: LaunchVector? = nil, spin: SpinEstimate? = nil,
                 trajectory: TrajectorySolution? = nil, landing: LandingEstimate? = nil,
                 clipFileName: String? = nil, club: Club? = nil, clipImpactTime: Double? = nil,
-                clipFrameRate: Double? = nil, isSimulated: Bool? = nil) {
+                clipFrameRate: Double? = nil, isSimulated: Bool? = nil, bagClub: BagClub? = nil,
+                holeNumber: Int? = nil, foundLocation: GeoCoordinate? = nil) {
         self.id = id
         self.capturedAt = capturedAt
         self.ballProfile = ballProfile
@@ -362,6 +369,9 @@ public struct ShotRecord: Codable, Identifiable, Equatable, Sendable {
         self.clipImpactTime = clipImpactTime
         self.clipFrameRate = clipFrameRate
         self.isSimulated = isSimulated
+        self.bagClub = bagClub
+        self.holeNumber = holeNumber
+        self.foundLocation = foundLocation
     }
 }
 

@@ -1,25 +1,6 @@
 import SwiftUI
 import VIGBTCore
 
-/// Club in hand: drives spin estimation, which matters most for irons.
-struct ClubPicker: View {
-    @Environment(AppModel.self) private var model
-
-    var body: some View {
-        @Bindable var model = model
-        Picker("Club", selection: $model.club) {
-            ForEach(Club.allCases) { club in
-                Text(club.displayName).tag(club)
-            }
-        }
-        .pickerStyle(.menu)
-        .font(.title2)
-        .tint(Palette.accent)
-        .accessibilityLabel("Club: \(model.club.displayName)")
-        .accessibilityHint("Choosing your club makes the carry estimate more accurate")
-    }
-}
-
 struct SimulatedShotButton: View {
     @Environment(AppModel.self) private var model
 
@@ -78,7 +59,7 @@ struct HistoryView: View {
     private func title(_ shot: ShotRecord) -> String {
         var parts: [String] = []
         if shot.isSimulated == true { parts.append("Simulated") }
-        if let club = shot.club, club != .auto { parts.append(club.displayName) }
+        if let b = shot.bagClub { parts.append(b.name) } else if let club = shot.club, club != .auto { parts.append(club.displayName) }
         if let l = shot.landing {
             parts.append(String(format: "%.0f yd carry", Units.yards(fromMeters: l.carryMeters)))
         } else if let launch = shot.launch {
@@ -87,5 +68,23 @@ struct HistoryView: View {
             parts.append("Not measured")
         }
         return parts.joined(separator: ", ")
+    }
+}
+
+/// Opens the course picker, or ends the current round.
+struct CourseButton: View {
+    @Environment(AppModel.self) private var model
+    @State private var showing = false
+
+    var body: some View {
+        HStack {
+            Button(model.round.isActive ? "Change course" : "Choose course and hole") { showing = true }
+            if model.round.isActive {
+                Button("End round", role: .destructive) { model.round.end() }
+            }
+        }
+        .font(.headline)
+        .frame(maxWidth: .infinity, minHeight: 48)
+        .sheet(isPresented: $showing) { CourseSheet() }
     }
 }

@@ -66,7 +66,8 @@ public struct ShotAnalyzer: Sendable {
     ///   - includeBallistics: false on the free tier (launch readout only).
     public func analyze(frames: [[DetectionCandidate]], calibration: TeeCalibration,
                         referenceRadiusPixels: Double?, includeBallistics: Bool,
-                        club: Club = .auto, spin: SpinEstimate? = nil, wind: Vector3 = .zero) -> ShotAnalysis {
+                        club: Club = .auto, spin: SpinEstimate? = nil, wind: Vector3 = .zero,
+                        zone: SearchZoneCalibration? = nil) -> ShotAnalysis {
         let expected = referenceRadiusPixels ?? CameraPose.expectedBallRadiusPixels(calibration: calibration)
         let gated = frames.map { sizeGate($0, expectedRadius: expected) }
         let track = tracker.track(frames: gated)
@@ -81,7 +82,7 @@ public struct ShotAnalyzer: Sendable {
             result.launch = launch
             if includeBallistics {
                 let spin = spin ?? SpinEstimator.estimate(club: club, launchAngleDeg: launch.launchAngleDeg)
-                let est = estimator.estimate(launch: launch, calibration: calibration, spin: spin, wind: wind)
+                let est = estimator.estimate(launch: launch, calibration: calibration, spin: spin, wind: wind, zone: zone)
                 result.spin = est.spin
                 result.trajectory = est.trajectory
                 result.landing = est.landing
@@ -154,6 +155,11 @@ public enum Readout {
         let radius = Units.yards(fromMeters: l.searchRadiusMeters)
         let side = abs(lateral) < 2 ? "on line" : "\(whole(abs(lateral))) yards \(lateral > 0 ? "right" : "left")"
         return "Estimated carry \(whole(carry)) yards, \(side). Search zone plus or minus \(whole(radius)) yards."
+    }
+
+    /// Compact on-screen form, e.g. "152 yd".
+    public static func distanceShort(meters: Double) -> String {
+        "\(whole(Units.yards(fromMeters: max(0, meters)))) yd"
     }
 
     public static func distance(yards: Double) -> String {

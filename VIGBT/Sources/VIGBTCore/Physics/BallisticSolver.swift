@@ -227,18 +227,26 @@ public struct LandingZoneEstimator: Sendable {
         self.minimumSearchRadiusMeters = minimumSearchRadiusMeters
     }
 
+    /// - Parameter zone: learned landing correction (`SearchZoneModel`); nil uses the fixed spec factor.
     public func estimate(launch: LaunchVector, calibration: TeeCalibration,
-                         spin: SpinEstimate? = nil, wind: Vector3 = .zero)
+                         spin: SpinEstimate? = nil, wind: Vector3 = .zero, zone: SearchZoneCalibration? = nil)
         -> (spin: SpinEstimate, trajectory: TrajectorySolution, landing: LandingEstimate) {
         let spin = spin ?? SpinEstimator.estimate(launchAngleDeg: launch.launchAngleDeg)
         let traj = solver.solve(launch: launch, spin: spin, wind: wind)
-        let radius = max(minimumSearchRadiusMeters, dispersionFactor * traj.carryMeters)
+        var carry = traj.carryMeters
+        var lateral = traj.lateralMeters
+        var radius = dispersionFactor * carry
+        if let zone, zone.sampleCount > 0 {
+            let c = zone.corrected(carry: carry, lateral: lateral)
+            (carry, lateral, radius) = (c.carry, c.lateral, c.radius)
+        }
+        radius = max(minimumSearchRadiusMeters, radius)
         let target = GeoMath.project(teeLocation: calibration.teeLocation,
                                      cameraHeadingDeg: calibration.cameraHeadingDeg,
-                                     carryMeters: traj.carryMeters,
-                                     lateralMeters: traj.lateralMeters,
+                                     carryMeters: carry,
+                                     lateralMeters: lateral,
                                      searchRadiusMeters: radius)
-        let landing = LandingEstimate(carryMeters: traj.carryMeters, lateralMeters: traj.lateralMeters,
+        let landing = LandingEstimate(carryMeters: carry, lateralMeters: lateral,
                                       searchRadiusMeters: radius, target: target)
         return (spin, traj, landing)
     }

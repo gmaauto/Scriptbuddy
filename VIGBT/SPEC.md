@@ -98,6 +98,15 @@ golfer to the ball with spatial audio and haptics.
 2. **Ground scanner:** HSV mask from the active ball profile + circular contours tuned for grass.
 3. **Haptics:** double-tap when the ball enters view; Geiger ticks that speed up as the ball is centred;
    confirmation tone + `.success` when centred within 2 m.
+4. **Learned search zone (implemented, from §9 research).**
+   - **What is recorded:** when a ball is found, its position (the Phase 4 lock point) is stored in the
+     shot as `foundLocation`. That gives a measured landing error for every found ball.
+   - **What is learned:** `SearchZoneModel` learns the golfer's own **carry bias**, **lateral bias** and a
+     **search radius** that covers 80% of past misses. It uses the last 20 found balls, per club category,
+     falling back to all clubs. It needs at least 5 real (not simulated) balls.
+   - **Limits:** both biases are capped at ±15% and the radius factor is held between 0.04 and 0.20 × carry.
+   - **Effect:** the next prediction is shifted and its circle resized. A golfer who always lands 10% short
+     and right is sent to the right place with a tighter circle, instead of the spec's fixed 8% radius.
 
 ### Phase 5 — Course & hole selection, club recommendation, course layout
 
@@ -312,13 +321,21 @@ Info.plist additions beyond §2.2: `NSMotionUsageDescription` (the pedometer nee
 ask for this justification). `VIGBT.storekit` lets the purchase be tested in the simulator and on a device
 without App Store Connect.
 
-**Phase 5 UI (specified, not yet built).**
+**Phase 5 UI (built).**
 - **New screens:** Course picker, Round setup (tee set and starting hole), and a Hole header on the
   Ready / Walk / Homing screens showing the hole number, par, distance to the pin and recommended club.
   The club picker defaults to the recommendation.
 - **Course layout:** a full-screen sheet with the **Return** button. While it is open, `AppModel.phase` does
   not change, so closing it restores the previous screen and all guidance keeps running underneath.
 - **New services:** `CourseService` (download and import), with the cache stored next to `ShotStore`.
+- **Files:** `Services/CourseService.swift`, `App/RoundModel.swift` and `Views/CourseViews.swift`.
+  - `HoleHeader` appears at the top of every screen during a round.
+  - Arriving on the next tee shows a "Yes, start hole N" prompt.
+  - The club picker is pre-selected from the recommendation until the golfer picks by hand.
+  - **My bag** edits which clubs are carried and their carry distances.
+  - The layout screen has **Read hole**, **Mark tee**, **Mark green**, **Set pin here** and **Return**.
+- **Not built yet:** importing GPX files (GeoJSON import works), and elevation for plays-like distance
+  (the hook is in place but no open elevation data is bundled yet).
 
 **Simulated shot.** `ShotSimulator` (core) generates a physically consistent calibration and per-frame
 detections, including the vacated tee spot and club-head distractors, from a random launch. The whole
@@ -359,4 +376,68 @@ monitor) a matter of rewriting the adapters only.
 
 **Bundled assets** such as sounds, icons and voice prompts must be created by the project or carry an open
 licence (CC0 or CC-BY). The beacon ping is synthesized in code, so it needs no asset.
+
+## 9. Research: features from other golf apps and open-source projects
+
+**Method.** Features were taken only from public sources: App Store listings, reviews, project READMEs and
+news coverage. No app was decompiled or reverse-engineered. That would break those apps' terms and
+copyright, and code obtained that way could not ship under Apache-2.0 (§8). Open-source code is reused only
+when its licence is compatible with Apache-2.0. Otherwise only the idea is used.
+
+### 9.1 What exists
+
+- **Commercial GPS and caddie apps** (Golf Pad, Golfshot, SwingU, Shot Pattern, Arccos, 18Birdies, Tangent):
+  - **Typical paid features:** plays-like distance (elevation and wind), club recommendations from the
+    golfer's own shot history, strokes gained, and per-club **dispersion patterns**.
+  - **Pricing:** the paid tiers cost about $25–$200 a year. Most are subscriptions, and Arccos needs
+    sensors.
+  - None of them is built for blind golfers.
+- **Blind and low-vision golf:**
+  - Toptracer ranges run sight-loss clinics where each shot's distance, direction and accuracy are spoken.
+  - GolfBuddy Voice devices speak GPS distances.
+  - A Johns Hopkins student project ("Green Reader") targets green reading for visually impaired putters.
+  - The MeepMeep disc-golf tracker shows that screen-reader-first design works for finding a thrown object.
+  - There is no mainstream golf ball finder for blind players. VIGBT's walk-to-ball and homing appear to be
+    unique.
+- **Sighted ball-finder apps,** for example Golf Ball Finder, put a coloured (blue) filter over the camera so a
+  ball stands out from grass.
+- **Open-source launch monitors:**
+  - **PiTrac** uses Raspberry Pi cameras to measure 3D speed, launch angles and spin. Its components carry
+    several licence files, so treat it as **ideas only** until those are checked.
+  - **OpenFlight** uses Doppler radar plus a sound trigger to measure ball and club speed, smash factor and
+    launch angle. It is **AGPL-3.0, so its code is not compatible** with this Apache-2.0 project and only
+    ideas are used.
+
+### 9.2 Adopted
+
+| Feature (seen in) | VIGBT version | Status |
+|---|---|---|
+| Plays-like distance (Golf Pad, SwingU) | `ClubAdvisor.playsLike`: elevation and wind | Done (elevation data pending) |
+| Club recommendation from personal history (SwingU, Golfshot, Arccos) | `ClubBag.learn` rolling median + `ClubAdvisor` | Done |
+| Alternatives when between clubs (Tangent "Smart Caddie") | One club either side is offered | Done |
+| Per-club dispersion (Shot Pattern, Arccos) | **Learned search zone** from *found* balls (Phase 4.4), which is ground truth no GPS app has | Done |
+| Hazard-aware lay-up (caddie apps) | Lay-up rule for hazards crossing the line | Done |
+| Spoken shot feedback (Toptracer blind clinics, GolfBuddy Voice) | Launch, carry and search-zone readouts | Done |
+| Sound-triggered capture window (OpenFlight, as an idea) | `ImpactDetector` | Already in place |
+
+### 9.3 Backlog (prioritised)
+
+1. **Low-vision ball highlight** (from colour-filter finder apps). On the Homing screen, draw the live
+   colour mask as a bright, magnifiable overlay so low-vision golfers can see the ball as well as hear it.
+2. **External launch monitor input** (from PiTrac and OpenFlight). An optional input that takes launch data
+   (`LaunchVector`, and spin when available) from a DIY or commercial launch monitor through an open, local
+   protocol. A radar's speed and spin then replace the camera estimate, while walk-to-ball and homing stay
+   unchanged. Check the licence and terms of whichever protocol is chosen first.
+3. **Club speed and smash factor** (from OpenFlight). Track the club-head blob in the frames before impact
+   (it is already in the motion mask) to estimate club speed and smash factor. Useful for coaching and as a
+   check on bad ball-speed readings.
+4. **Strokes gained, spoken** (from Golf Pad, Shot Pattern and 18Birdies). Use the round's shot positions
+   to produce a short spoken summary after each hole.
+5. **Green reading with LiDAR** (from Green Reader). Scan the green with the ARKit mesh, fit a plane, then
+   speak the slope and fall line relative to the line to the hole, for example "Putt breaks left, slightly
+   uphill."
+6. **Apple Watch** (from Golfshot and Arccos). Directional taps on the wrist for walk-to-ball, and homing
+   ticks on the wrist so the phone can stay pointed at the ground.
+7. **Practice-range mode** (from Toptracer clinics). Capture and readouts only, with no walk or homing, for
+   lessons and warm-ups.
 

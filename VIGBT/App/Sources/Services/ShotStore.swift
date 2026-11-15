@@ -65,6 +65,12 @@ final class ShotStore {
         save(shots, "shots.json")
     }
 
+    func update(_ shot: ShotRecord) {
+        guard let i = shots.firstIndex(where: { $0.id == shot.id }) else { return }
+        shots[i] = shot
+        save(shots, "shots.json")
+    }
+
     func clipURL(for shot: ShotRecord) -> URL? {
         guard let name = shot.clipFileName else { return nil }
         let url = Self.clipsDirectory.appendingPathComponent(name)
