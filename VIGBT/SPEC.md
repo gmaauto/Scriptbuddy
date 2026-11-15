@@ -18,6 +18,8 @@ golfer to the ball with spatial audio and haptics.
   to a ballistic solver.
 - **Accessibility first.** Every screen, alert and feedback loop is built around VoiceOver, high-contrast
   readouts and tactile feedback.
+- **Open source throughout.** The app's code, every third-party dependency and every data source must be
+  open source or open data. The details are in §8.
 
 ## 2. Commercial & App Store Architecture
 
@@ -29,6 +31,9 @@ golfer to the ball with spatial audio and haptics.
 - **Pro tier:** unlimited shots, ballistic range & dispersion, GPS/spatial-audio walk-to-ball, haptic homing.
 - **Receipt validation:** on-device via `Transaction.currentEntitlements` (StoreKit 2 JWS verification); no
   receipt server.
+- **Open source and paid at the same time:** the source is public, so anyone can build the app themselves
+  for free. The App Store price pays for the convenience of a signed, maintained build, and it is allowed
+  under the licences in §8. The Pro gate is therefore a way to support the project, not copy protection.
 
 ### 2.2 App Store review & hardware compliance
 
@@ -104,13 +109,20 @@ back-nine or shotgun start), and at every shot the app says the distance to the 
      a list of recently played courses, which works offline.
    - **Course data:** each hole's tee boxes, green (front, centre and back), pin, fairway outline and
      hazards (bunkers, water, out of bounds), plus par and stroke index.
-   - **Data sources, in order of preference:**
-     - a course package downloaded once and then cached on the device (for example built from
-       OpenStreetMap `golf=*` features: `golf=hole`, `tee`, `green`, `pin`, `fairway`, `bunker`,
-       `water_hazard`);
-     - a GeoJSON or GPX file the user imports;
-     - **marking the course in person:** stand on each tee and on each green and press "Mark tee" and
+   - **Data sources (open data only, no proprietary or paid course databases):**
+     - **OpenStreetMap (ODbL):** the app fetches one course's `golf=*` features once (`golf=hole` with its
+       `ref`, `par` and `handicap` tags, plus `tee`, `green`, `pin`, `fairway`, `bunker`, `water_hazard`,
+       `lateral_water_hazard` and `rough`) through a public Overpass API instance, following its fair-use
+       policy. The result is converted to a `GolfCourse` package and cached on the device.
+     - **An open-format file the user imports:** GeoJSON or GPX, for example exported from OSM editors.
+     - **Marking the course in person:** stand on each tee and on each green and press "Mark tee" and
        "Mark green". This needs no data at all.
+     - **Elevation for "plays-like" distance:** optional, from open elevation data (Copernicus GLO-30 DEM or
+       SRTM). If it is not available, the elevation adjustment is skipped.
+   - **Coverage gaps:** many courses in OSM have only some holes or no pins mapped. Missing pieces are filled
+     by marking in person. Courses the golfer marks can optionally be contributed back to OpenStreetMap
+     through the golfer's own OSM account. This is never automatic, because the data is the golfer's own
+     GPS trace.
    - **Offline principle:** downloading a course is the only network use, and it happens once. There is no
      backend and no recurring cost, so §1's on-device principle still holds. Playing a cached course needs
      no signal.
@@ -153,8 +165,11 @@ back-nine or shotgun start), and at every shot the app says the distance to the 
    - **Opening it:** a **Course layout** button is on the Ready, Replay, Walk and Homing screens. It opens a
      full-screen view of the current hole. Opening it does not stop any running guidance: the beacon,
      milestone callouts and homing haptics keep going.
-   - **Visual view:** a MapKit satellite or high-contrast map, rotated so the tee is at the bottom and the
-     green at the top. Overlays in thick, high-contrast colours show:
+   - **Visual view:** drawn by the app itself with SwiftUI `Canvas` from the course's open vector data. There
+     are no map tiles and no satellite imagery, both of which are proprietary. This also keeps the view
+     fully offline and lets it use high contrast. The hole is rotated so the tee is at the bottom and the
+     green at the top, and shows "© OpenStreetMap contributors" as the ODbL requires. Overlays in thick,
+     high-contrast colours show:
      - the tee;
      - the fairway outline;
      - hazards, in a distinct colour and pattern;
@@ -321,3 +336,27 @@ and supports walk-to-ball.
   pitch/roll derivation relies on this).
 - The motion/colour thresholds on real grass and in real light.
 - `CLHeading` behaviour when the phone is held upright rather than flat.
+
+## 8. Open-source policy and licensing
+
+Everything that makes up VIGBT must be open source or open data.
+
+| Part | Requirement | Current status |
+|---|---|---|
+| **VIGBT source code** (core, app, tests, tools) | Published under an OSI-approved licence. Recommended: **Apache-2.0**, which is compatible with App Store distribution and grants patent rights. MIT would also work. Avoid GPL/AGPL: the App Store terms conflict with them, and the FSF has had GPL apps removed for this reason. | **Licence not chosen yet. A `LICENSE` file is still needed.** |
+| **Third-party code dependencies** | Only OSI-licensed packages, pinned to exact versions, with their licences listed in an in-app "Acknowledgements" screen. | None so far. `VIGBTCore` and the app use only the Swift standard library and the iOS SDK. |
+| **Build tools** | Open source. | XcodeGen (MIT), Swift toolchain (Apache-2.0). The coefficient-fitting script is in this repo. |
+| **Course data** | Open data only: OpenStreetMap (ODbL 1.0), user imports in open formats (GeoJSON or GPX), or the golfer's own marking. ODbL needs "© OpenStreetMap contributors" shown wherever course data appears, and share-alike for any course *database* the project publishes. | Specified in Phase 5.1. |
+| **Elevation data** | Open data only: Copernicus GLO-30 or SRTM, with attribution. | Optional. |
+| **Maps and imagery** | No proprietary map tiles or satellite imagery. The course layout is drawn from vector data (Phase 5.4). | Specified. |
+| **Physics and aero coefficients** | Derived only from published averages and documented in this spec (§6 note 4), so others can reproduce and change them. | Done. |
+
+**Exception: the platform itself.** iOS frameworks such as AVFoundation, ARKit, CoreLocation, CoreHaptics
+and StoreKit are closed source, and any iOS app has to use them. The project keeps them as thin adapters
+in `VIGBT/App`. All algorithms stay in the open, Foundation-only `VIGBTCore` package, which also builds on
+Linux. That makes a future port to another platform (for example Android, or an open-hardware launch
+monitor) a matter of rewriting the adapters only.
+
+**Bundled assets** such as sounds, icons and voice prompts must be created by the project or carry an open
+licence (CC0 or CC-BY). The beacon ping is synthesized in code, so it needs no asset.
+
