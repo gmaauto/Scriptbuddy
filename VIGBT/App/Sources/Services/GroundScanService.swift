@@ -1,4 +1,5 @@
 import AVFoundation
+import CoreGraphics
 import VIGBTCore
 
 /// Phase 4.1–4.2: rear Wide camera at 1080p60 with continuous autofocus and auto torch, scanning
@@ -7,6 +8,19 @@ final class GroundScanService: NSObject, AVCaptureVideoDataOutputSampleBufferDel
     let session = AVCaptureSession()
     /// Called on the main queue for every processed frame (nil = no ball in view).
     var onDetection: (@MainActor (GroundDetection?) -> Void)?
+    /// Low-vision ball highlight frames (SPEC §11), about 10 per second while enabled.
+    var onHighlight: (@MainActor (CGImage?) -> Void)?
+    var highlightEnabled: Bool {
+        get { lock.lock(); defer { lock.unlock() }; return _highlightEnabled }
+        set { lock.lock(); _highlightEnabled = newValue; lock.unlock() }
+    }
+    var highlightPalette: ThemePalette {
+        get { lock.lock(); defer { lock.unlock() }; return _highlightPalette }
+        set { lock.lock(); _highlightPalette = newValue; lock.unlock() }
+    }
+    private var _highlightEnabled = true
+    private var _highlightPalette = ThemePalette.highContrastDark
+    private var frameCounter = 0
 
     private let sessionQueue = DispatchQueue(label: "vigbt.scan.session")
     private let videoQueue = DispatchQueue(label: "vigbt.scan.video", qos: .userInitiated)
@@ -114,5 +128,21 @@ final class GroundScanService: NSObject, AVCaptureVideoDataOutputSampleBufferDel
                                         distanceMeters: distance)
         }
         Task { @MainActor in self.onDetection?(detection) }
+
+        frameCounter += 1
+        if highlightEnabled, frameCounter % 6 == 0 { // 60 fps capture → 10 fps highlight
+            let p = highlightPalette
+            let img = BallHighlight.render(masks: masks, ball: best, highlight: p.accent, ring: p.pin, background: p.background)
+            let cg = Self.makeImage(img)
+            Task { @MainActor in self.onHighlight?(cg) }
+        }
+    }
+
+    private static func makeImage(_ img: BallHighlight.Image) -> CGImage? {
+        guard let provider = CGDataProvider(data: Data(img.rgba) as CFData) else { return nil }
+        return CGImage(width: img.width, height: img.height, bitsPerComponent: 8, bitsPerPixel: 32,
+                       bytesPerRow: img.width * 4, space: CGColorSpace(name: CGColorSpace.sRGB)!,
+                       bitmapInfo: CGBitmapInfo(rawValue: CGImageAlphaInfo.noneSkipLast.rawValue),
+                       provider: provider, decode: nil, shouldInterpolate: false, intent: .defaultIntent)
     }
 }

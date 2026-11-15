@@ -34,7 +34,7 @@ struct CourseSheet: View {
                             VStack(alignment: .leading) {
                                 Text(s.name).font(.title3.bold())
                                 if let d = s.distanceMeters {
-                                    Text(String(format: "%.1f km away", d / 1000)).foregroundStyle(.secondary)
+                                    Text(String(format: "%.1f km away", d / 1000)).foregroundStyle(Palette.secondaryText)
                                 }
                             }
                         }
@@ -47,7 +47,7 @@ struct CourseSheet: View {
                         Button { chosen = c } label: {
                             VStack(alignment: .leading) {
                                 Text(c.name).font(.title3.bold())
-                                Text("\(c.holes.count) holes · \(sourceName(c.source))").foregroundStyle(.secondary)
+                                Text("\(c.holes.count) holes · \(sourceName(c.source))").foregroundStyle(Palette.secondaryText)
                             }
                         }
                     }
@@ -55,8 +55,9 @@ struct CourseSheet: View {
                 }
                 Section("Other ways to add a course") {
                     Button("Import a GeoJSON file") { importing = true }
-                    HStack {
+                    AdaptiveStack {
                         TextField("New course name", text: $newCourseName)
+                            .font(.title3)
                         Button("Mark on site") { markNew() }
                             .disabled(newCourseName.trimmingCharacters(in: .whitespaces).isEmpty)
                     }
@@ -184,41 +185,49 @@ struct HoleHeader: View {
         let round = model.round
         VStack(spacing: 8) {
             if let pending = round.pendingHole {
-                HStack {
+                AdaptiveStack(spacing: 8) {
                     Button("Yes, start hole \(pending)") { round.confirmPendingHole() }
-                        .buttonStyle(.borderedProminent).tint(Palette.accent).foregroundStyle(.black)
+                        .buttonStyle(VIGBTButtonStyle(prominent: true))
                     Button("Not yet") { round.dismissPendingHole() }
+                        .buttonStyle(CompactButtonStyle())
                 }
-                .font(.headline)
             }
             HStack(spacing: 12) {
-                Button { round.previous() } label: { Image(systemName: "chevron.left").font(.title2.bold()) }
-                    .accessibilityLabel("Previous hole")
+                Button { round.previous() } label: {
+                    Image(systemName: "chevron.left").font(.title2.bold()).frame(minWidth: 44, minHeight: 44)
+                }
+                .buttonStyle(CompactButtonStyle())
+                .frame(width: 60)
+                .accessibilityLabel("Previous hole")
                 Button { round.announceRecommendation() } label: {
                     VStack(spacing: 2) {
                         Text(title).font(.title3.bold())
                         Text(subtitle).font(.headline).foregroundStyle(Palette.accent)
                     }
-                    .frame(maxWidth: .infinity)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity, minHeight: 44)
                 }
+                .foregroundStyle(Palette.text)
                 .accessibilityLabel("\(title). \(subtitle)")
                 .accessibilityHint("Speaks the distance and club recommendation")
-                Button { round.next() } label: { Image(systemName: "chevron.right").font(.title2.bold()) }
-                    .accessibilityLabel("Next hole")
+                Button { round.next() } label: {
+                    Image(systemName: "chevron.right").font(.title2.bold()).frame(minWidth: 44, minHeight: 44)
+                }
+                .buttonStyle(CompactButtonStyle())
+                .frame(width: 60)
+                .accessibilityLabel("Next hole")
             }
             Button {
                 showLayout = true
             } label: {
                 Label("Course layout", systemImage: "map")
-                    .font(.headline)
-                    .frame(maxWidth: .infinity, minHeight: 44)
             }
-            .buttonStyle(.bordered)
-            .tint(Palette.accent)
+            .buttonStyle(CompactButtonStyle())
             .accessibilityHint("Shows and describes the current hole. Guidance keeps running.")
         }
         .padding(.horizontal)
-        .padding(.top, 4)
+        .padding(.vertical, 6)
+        .background(Palette.surface)
         .fullScreenCover(isPresented: $showLayout) { CourseLayoutView() }
     }
 
@@ -246,49 +255,53 @@ struct CourseLayoutView: View {
     var body: some View {
         let round = model.round
         let description = round.describeHole(golfer: model.currentPosition)
-        VStack(spacing: 12) {
-            ScreenTitle(text: description?.summary ?? "No hole selected")
-            if let hole = round.currentHole, let geo = HoleGeometry(hole: hole) {
-                HoleCanvas(geometry: geo, golfer: model.currentPosition,
-                           landing: model.currentShot?.landing)
-                    .accessibilityHidden(true)
-                    .frame(maxHeight: .infinity)
-            } else {
-                Text("This hole has not been mapped. Use the buttons below while standing on the tee, on the green, or next to the hole.")
-                    .font(.title3)
-                    .multilineTextAlignment(.center)
-                    .frame(maxHeight: .infinity)
-            }
-            if let features = description?.features, !features.isEmpty {
-                ScrollView(.horizontal) {
-                    HStack {
+        VStack(spacing: 0) {
+            Screen {
+                ScreenTitle(text: description?.summary ?? "No hole selected")
+                if let hole = round.currentHole, let geo = HoleGeometry(hole: hole) {
+                    HoleCanvas(geometry: geo, golfer: model.currentPosition,
+                               landing: model.currentShot?.landing)
+                        .frame(height: 420)
+                        .accessibilityHidden(true)
+                        .accessibilityIgnoresInvertColors()
+                    MapLegend()
+                } else {
+                    Text("This hole has not been mapped. Use the buttons below while standing on the tee, on the green, or next to the hole.")
+                        .font(.title3)
+                        .multilineTextAlignment(.center)
+                }
+                if let features = description?.features, !features.isEmpty {
+                    VStack(alignment: .leading, spacing: 8) {
                         ForEach(features) { f in
                             Text(f.text)
-                                .font(.headline)
+                                .font(.title3)
+                                .frame(maxWidth: .infinity, alignment: .leading)
                                 .padding(10)
-                                .background(RoundedRectangle(cornerRadius: 8).stroke(Palette.accent))
+                                .background(RoundedRectangle(cornerRadius: 8).fill(Palette.surface))
                         }
                     }
                 }
-                .frame(maxHeight: 70)
-            }
-            HStack {
-                Button("Read hole") {
-                    if let d = description { model.speakText(d.fullText) }
+                AdaptiveStack(spacing: 8) {
+                    Button("Read hole") {
+                        if let d = description { model.speakText(d.fullText) }
+                    }
+                    Button("Mark tee") { if let p = model.currentPosition { round.markTee(at: p) } }
                 }
-                Button("Mark tee") { if let p = model.currentPosition { round.markTee(at: p) } }
-                Button("Mark green") { if let p = model.currentPosition { round.markGreen(at: p) } }
-                Button("Set pin here") { if let p = model.currentPosition { round.setPin(at: p) } }
+                .buttonStyle(CompactButtonStyle())
+                AdaptiveStack(spacing: 8) {
+                    Button("Mark green") { if let p = model.currentPosition { round.markGreen(at: p) } }
+                    Button("Set pin here") { if let p = model.currentPosition { round.setPin(at: p) } }
+                }
+                .buttonStyle(CompactButtonStyle())
+                if let attribution = round.course?.attribution {
+                    Text(attribution).font(.footnote).foregroundStyle(Palette.secondaryText)
+                }
             }
-            .font(.headline)
-            .buttonStyle(.bordered)
-            .tint(Palette.accent)
-            if let attribution = round.course?.attribution {
-                Text(attribution).font(.caption2).foregroundStyle(.secondary)
-            }
+            // Return stays pinned at the bottom, outside the scroll area, so it is always reachable.
             BigButton(title: "Return", hint: "Goes back to where you were") { dismiss() }
+                .padding()
+                .background(Palette.background)
         }
-        .padding()
         .background(Palette.background.ignoresSafeArea())
         .foregroundStyle(Palette.text)
         .accessibilityAction(.escape) { dismiss() }
@@ -303,6 +316,7 @@ struct HoleCanvas: View {
     let geometry: HoleGeometry
     let golfer: GeoCoordinate?
     let landing: LandingEstimate?
+    @Environment(\.colorSchemeContrast) private var contrast
 
     var body: some View {
         Canvas { ctx, size in
@@ -313,7 +327,7 @@ struct HoleCanvas: View {
             let pts = all.map(geometry.layoutPoint)
             let xs = pts.map { $0.x }, ys = pts.map { $0.y }
             let minX = (xs.min() ?? -30) - 25, maxX = (xs.max() ?? 30) + 25
-            let minY = (ys.min() ?? 0) - 15, maxY = (ys.max() ?? 100) + 15
+            let minY = (ys.min() ?? 0) - 25, maxY = (ys.max() ?? 100) + 30
             let scale = min(size.width / (maxX - minX), size.height / (maxY - minY))
             let ox = (size.width - (maxX - minX) * scale) / 2
             func p(_ c: GeoCoordinate) -> CGPoint {
@@ -333,42 +347,115 @@ struct HoleCanvas: View {
                 return Path(ellipseIn: CGRect(x: q.x - r, y: q.y - r, width: 2 * r, height: 2 * r))
             }
 
-            for f in hole.fairways { ctx.fill(polygon(f), with: .color(Color(white: 0.25))) }
+            let outline = StrokeStyle(lineWidth: contrast == .increased ? 3 : 2, lineJoin: .round)
+            func label(_ text: String, at c: CGPoint) {
+                // Text on a background plate so it keeps ≥ 7:1 whatever is underneath.
+                let resolved = ctx.resolve(Text(text).font(.callout.bold()).foregroundColor(Palette.text))
+                let size = resolved.measure(in: CGSize(width: 200, height: 60))
+                let rect = CGRect(x: c.x - size.width / 2 - 4, y: c.y - size.height / 2 - 2,
+                                  width: size.width + 8, height: size.height + 4)
+                ctx.fill(Path(roundedRect: rect, cornerRadius: 4), with: .color(Palette.background))
+                ctx.stroke(Path(roundedRect: rect, cornerRadius: 4), with: .color(Palette.text), lineWidth: 1)
+                ctx.draw(resolved, at: c)
+            }
+            func centroid(_ cs: [GeoCoordinate]) -> CGPoint {
+                let ps = cs.map(p)
+                return CGPoint(x: ps.map(\.x).reduce(0, +) / CGFloat(ps.count), y: ps.map(\.y).reduce(0, +) / CGFloat(ps.count))
+            }
+            /// Pattern inside a shape: 0 = horizontal waves (water), 1 = dots (sand).
+            func pattern(_ shape: Path, kind: Int, color: Color) {
+                var c = ctx
+                c.clip(to: shape)
+                let b = shape.boundingRect
+                if kind == 0 {
+                    var y = b.minY + 4
+                    while y < b.maxY {
+                        var wave = Path()
+                        wave.move(to: CGPoint(x: b.minX, y: y))
+                        var x = b.minX
+                        while x < b.maxX {
+                            wave.addQuadCurve(to: CGPoint(x: x + 12, y: y), control: CGPoint(x: x + 6, y: y - 4))
+                            x += 12
+                        }
+                        c.stroke(wave, with: .color(color), lineWidth: 1.5)
+                        y += 8
+                    }
+                } else {
+                    var y = b.minY + 3
+                    while y < b.maxY {
+                        var x = b.minX + 3
+                        while x < b.maxX {
+                            c.fill(Path(ellipseIn: CGRect(x: x, y: y, width: 2.5, height: 2.5)), with: .color(color))
+                            x += 7
+                        }
+                        y += 7
+                    }
+                }
+            }
+
+            for f in hole.fairways {
+                ctx.fill(polygon(f), with: .color(Palette.fairway))
+                ctx.stroke(polygon(f), with: .color(Palette.text.opacity(0.6)), style: outline)
+            }
             for h in hole.hazards {
                 let shape = h.outline.count >= 3 ? polygon(h.outline) : dot(h.outline[0], 8)
                 switch h.kind {
-                case .water: ctx.fill(shape, with: .color(.blue))
-                case .bunker: ctx.fill(shape, with: .color(Color(red: 0.95, green: 0.85, blue: 0.55)))
-                case .outOfBounds, .trees: ctx.stroke(shape, with: .color(.red), style: StrokeStyle(lineWidth: 3, dash: [8, 6]))
+                case .water:
+                    ctx.fill(shape, with: .color(Palette.water))
+                    pattern(shape, kind: 0, color: Palette.background)
+                    ctx.stroke(shape, with: .color(Palette.text), style: outline)
+                    label("Water", at: centroid(h.outline))
+                case .bunker:
+                    ctx.fill(shape, with: .color(Palette.bunker))
+                    pattern(shape, kind: 1, color: Palette.background)
+                    ctx.stroke(shape, with: .color(Palette.text), style: outline)
+                    label("Sand", at: centroid(h.outline))
+                case .outOfBounds, .trees:
+                    ctx.stroke(shape, with: .color(Palette.outOfBounds),
+                               style: StrokeStyle(lineWidth: 4, dash: [10, 6]))
+                    label(h.kind == .trees ? "Trees" : "OB", at: centroid(h.outline))
                 }
             }
             if let g = hole.green {
                 let shape = g.outline.count >= 3 ? polygon(g.outline) : dot(g.center, 14)
-                ctx.fill(shape, with: .color(.green))
+                ctx.fill(shape, with: .color(Palette.green))
+                ctx.stroke(shape, with: .color(Palette.text), style: outline)
             }
             var line = Path()
             if let first = hole.playingLine.first {
                 line.move(to: p(first))
                 hole.playingLine.dropFirst().forEach { line.addLine(to: p($0)) }
             }
-            ctx.stroke(line, with: .color(.white.opacity(0.6)), style: StrokeStyle(lineWidth: 2, dash: [6, 6]))
-            for t in hole.tees { ctx.fill(dot(t.coordinate, 7), with: .color(.white)) }
+            ctx.stroke(line, with: .color(Palette.text), style: StrokeStyle(lineWidth: 2, dash: [6, 6]))
+            for t in hole.tees {
+                ctx.fill(dot(t.coordinate, 8), with: .color(Palette.text))
+            }
+            if let first = hole.tees.first { label("Tee", at: CGPoint(x: p(first.coordinate).x, y: p(first.coordinate).y + 22)) }
             if let pin = hole.target {
                 let q = p(pin)
                 var flag = Path()
                 flag.move(to: q)
-                flag.addLine(to: CGPoint(x: q.x, y: q.y - 28))
-                ctx.stroke(flag, with: .color(.white), lineWidth: 3)
-                ctx.fill(Path(CGRect(x: q.x, y: q.y - 28, width: 16, height: 10)), with: .color(.red))
+                flag.addLine(to: CGPoint(x: q.x, y: q.y - 30))
+                ctx.stroke(flag, with: .color(Palette.text), lineWidth: 3)
+                let pennant = Path(CGRect(x: q.x, y: q.y - 30, width: 18, height: 11))
+                ctx.fill(pennant, with: .color(Palette.pin))
+                ctx.stroke(pennant, with: .color(Palette.text), lineWidth: 1)
+                label("Pin", at: CGPoint(x: q.x, y: q.y - 46))
             }
             if let landing {
                 let c = landing.target.coordinate
                 let r = CGFloat(landing.searchRadiusMeters * scale)
                 let q = p(c)
-                ctx.stroke(Path(ellipseIn: CGRect(x: q.x - r, y: q.y - r, width: 2 * r, height: 2 * r)),
-                           with: .color(.orange), lineWidth: 3)
+                let circle = Path(ellipseIn: CGRect(x: q.x - r, y: q.y - r, width: 2 * r, height: 2 * r))
+                ctx.stroke(circle, with: .color(Palette.background), lineWidth: 7)
+                ctx.stroke(circle, with: .color(Palette.accent), style: StrokeStyle(lineWidth: 4, dash: [8, 5]))
+                label("Search zone", at: CGPoint(x: q.x, y: q.y + r + 14))
             }
-            if let golfer { ctx.fill(dot(golfer, 9), with: .color(.yellow)) }
+            if let golfer {
+                ctx.fill(dot(golfer, 11), with: .color(Palette.background))
+                ctx.fill(dot(golfer, 8), with: .color(Palette.accent))
+                label("You", at: CGPoint(x: p(golfer).x + 30, y: p(golfer).y))
+            }
         }
     }
 }
@@ -381,7 +468,7 @@ struct ClubPicker: View {
     @State private var editingBag = false
 
     var body: some View {
-        HStack {
+        AdaptiveStack {
             Picker("Club", selection: Binding(
                 get: { model.bagClub },
                 set: { model.bagClub = $0; model.clubOverridden = true })) {
@@ -395,7 +482,7 @@ struct ClubPicker: View {
             .tint(Palette.accent)
             .accessibilityLabel("Club: \(model.bagClub?.name ?? "Automatic")")
             Button("My bag") { editingBag = true }
-                .font(.headline)
+                .buttonStyle(CompactButtonStyle())
         }
         .sheet(isPresented: $editingBag) { ClubBagView() }
     }
@@ -447,3 +534,34 @@ private struct ClubRow: View {
         model.round.bag.update(stats.club) { $0.userCarryMeters = Units.meters(fromYards: Double(max(10, yards))) }
     }
 }
+
+/// Text legend for the map: every colour also has a pattern and a written name.
+struct MapLegend: View {
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Map key").font(.headline).accessibilityAddTraits(.isHeader)
+            AdaptiveStack(spacing: 12) {
+                key(Palette.water, "Water (waves)")
+                key(Palette.bunker, "Sand (dots)")
+            }
+            AdaptiveStack(spacing: 12) {
+                key(Palette.green, "Green")
+                key(Palette.outOfBounds, "Out of bounds (dashed)")
+            }
+        }
+        .font(.callout)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .accessibilityHidden(true) // The spoken hole description covers the same information.
+    }
+
+    private func key(_ color: Color, _ text: String) -> some View {
+        HStack(spacing: 6) {
+            RoundedRectangle(cornerRadius: 3).fill(color)
+                .overlay(RoundedRectangle(cornerRadius: 3).stroke(Palette.text, lineWidth: 1))
+                .frame(width: 22, height: 16)
+            Text(text)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+}
+

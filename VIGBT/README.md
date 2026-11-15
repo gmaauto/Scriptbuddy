@@ -32,6 +32,17 @@ Run it on a LiDAR iPhone (12 Pro or newer Pro model); the simulator has no camer
 development team under Signing & Capabilities. `VIGBT.storekit` is wired into the scheme, so the Pro
 purchase can be tested locally. See SPEC.md §7 for what each file does.
 
+## Versioning
+
+The current version is in [`VERSION`](VERSION), and changes are listed in [CHANGELOG.md](CHANGELOG.md).
+SPEC.md §10 has the rules. Run `tools/check_version.sh` before committing a release.
+
+## Accessibility
+
+Every screen meets WCAG 2.2 AAA text contrast (at least 7:1) in both the high-contrast dark and light
+themes, supports Dynamic Type up to the largest accessibility sizes, and never relies on colour alone.
+SPEC.md §11 has the details, and `AccessibilityTests` checks the palette.
+
 ## Licence
 
 VIGBT is open source under the [Apache License 2.0](LICENSE). Its dependencies and data sources must be

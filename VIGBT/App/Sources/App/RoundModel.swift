@@ -29,12 +29,14 @@ final class RoundModel {
     var teeSetName: String? { state?.teeSetName }
 
     init() {
-        if let data = defaults.data(forKey: "clubBag"), let b = try? JSONDecoder().decode(ClubBag.self, from: data) {
+        if let data = defaults.data(forKey: "clubBag"),
+           let b = try? DataFormat.decode(ClubBag.self, from: data, supported: DataFormat.bag) {
             bag = b
         } else {
             bag = .standard
         }
-        if let data = defaults.data(forKey: "round"), let r = try? JSONDecoder().decode(RoundState.self, from: data),
+        if let data = defaults.data(forKey: "round"),
+           let r = try? DataFormat.decode(RoundState.self, from: data, supported: DataFormat.round),
            let c = courses.saved.first(where: { $0.id == r.courseID }) {
             course = c
             state = r
@@ -181,10 +183,11 @@ final class RoundModel {
     // MARK: Persistence
 
     private func saveBag() {
-        defaults.set(try? JSONEncoder().encode(bag), forKey: "clubBag")
+        defaults.set(try? DataFormat.encode(bag, format: DataFormat.bag), forKey: "clubBag")
     }
 
     private func saveRound() {
-        defaults.set(try? JSONEncoder().encode(state), forKey: "round")
+        guard let state else { return defaults.removeObject(forKey: "round") }
+        defaults.set(try? DataFormat.encode(state, format: DataFormat.round), forKey: "round")
     }
 }

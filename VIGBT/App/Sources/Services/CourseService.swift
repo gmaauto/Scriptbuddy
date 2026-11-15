@@ -105,7 +105,7 @@ final class CourseService {
     // MARK: Cache
 
     func save(_ course: GolfCourse) {
-        if let data = try? JSONEncoder().encode(course) {
+        if let data = try? DataFormat.encode(course, format: DataFormat.course) {
             try? data.write(to: fileURL(course.id), options: .atomic)
         }
         saved.removeAll { $0.id == course.id }
@@ -119,7 +119,9 @@ final class CourseService {
 
     private func loadSaved() {
         let files = (try? FileManager.default.contentsOfDirectory(at: Self.directory, includingPropertiesForKeys: nil)) ?? []
-        saved = files.compactMap { try? JSONDecoder().decode(GolfCourse.self, from: Data(contentsOf: $0)) }
+        saved = files.compactMap { url in
+            (try? Data(contentsOf: url)).flatMap { try? DataFormat.decode(GolfCourse.self, from: $0, supported: DataFormat.course) }
+        }
             .sorted { $0.updatedAt > $1.updatedAt }
     }
 

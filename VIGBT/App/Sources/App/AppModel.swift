@@ -27,6 +27,19 @@ final class AppModel {
     var club: Club {
         didSet { store.club = club }
     }
+    /// Display theme (SPEC §11). Applied at the root with `preferredColorScheme`.
+    var theme: Theme {
+        didSet { store.theme = theme }
+    }
+    /// Low-vision ball highlight on the Homing screen.
+    var ballHighlightEnabled: Bool {
+        didSet {
+            store.ballHighlightEnabled = ballHighlightEnabled
+            scanner.highlightEnabled = ballHighlightEnabled
+        }
+    }
+    /// Latest ball-highlight frame from the ground scanner.
+    private(set) var highlightImage: CGImage?
     /// The specific club in hand (Phase 5.3). Setting it also sets the spin category.
     var bagClub: BagClub? {
         didSet { if let b = bagClub { club = b.spinCategory } }
@@ -60,7 +73,13 @@ final class AppModel {
         needsOnboarding = !s.hasAcceptedDisclaimer
         profile = s.colorProfile
         club = s.club
+        theme = s.theme
+        ballHighlightEnabled = s.ballHighlightEnabled
         wireCallbacks()
+        scanner.highlightEnabled = ballHighlightEnabled
+        if !s.lockedFiles.isEmpty {
+            errorMessage = "Some of your data was saved by a newer version of VIGBT. It has been kept safe and unchanged. Please update the app to see it."
+        }
     }
 
     // MARK: Onboarding
@@ -307,6 +326,8 @@ final class AppModel {
         location.endWalk()
         homing.reset()
         homingStatus = "Searching"
+        highlightImage = nil
+        scanner.highlightPalette = effectivePalette
         scanner.start(profile: profile)
         phase = .homing
         speak("Arrived at search zone. Point the phone at the ground and sweep slowly from side to side.", interrupt: true)
@@ -378,6 +399,7 @@ final class AppModel {
         capture.onImpact = { [weak self] in self?.impactDetected() }
         capture.onClip = { [weak self] in self?.clipReady($0) }
         scanner.onDetection = { [weak self] in self?.groundDetection($0) }
+        scanner.onHighlight = { [weak self] in self?.highlightImage = $0 }
         location.onUpdate = { [weak self] in
             guard let self else { return }
             self.navigationTick()
@@ -396,6 +418,11 @@ final class AppModel {
             forName: ProcessInfo.thermalStateDidChangeNotification, object: nil, queue: .main) { [weak self] _ in
             Task { @MainActor in self?.thermalChanged() }
         }
+    }
+
+    /// The palette currently on screen (resolves "Match system").
+    var effectivePalette: ThemePalette {
+        ThemePalette.palette(for: theme, systemIsDark: UITraitCollection.current.userInterfaceStyle != .light)
     }
 
     /// Best current position: the smoothed walking position, else the latest GPS fix.

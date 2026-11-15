@@ -8,7 +8,7 @@ struct VIGBTApp: App {
         WindowGroup {
             RootView()
                 .environment(model)
-                .preferredColorScheme(.dark) // high contrast: white/yellow on black
+                .preferredColorScheme(model.theme.colorScheme) // nil = match system (SPEC §11)
         }
     }
 }

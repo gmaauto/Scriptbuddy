@@ -7,6 +7,12 @@ on:
     paths: ["VIGBT/**", ".github/workflows/vigbt.yml"]
 
 jobs:
+  version:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: VIGBT/tools/check_version.sh
+
   linux:
     runs-on: ubuntu-latest
     container: swift:5.10

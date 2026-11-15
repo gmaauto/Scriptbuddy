@@ -6,8 +6,7 @@ struct SimulatedShotButton: View {
 
     var body: some View {
         Button("Simulated shot") { model.runSimulatedShot() }
-            .font(.headline)
-            .frame(maxWidth: .infinity, minHeight: 48)
+            .buttonStyle(CompactButtonStyle())
             .accessibilityHint("Runs a practice shot without a ball, to try replay and walking guidance")
     }
 }
@@ -17,8 +16,7 @@ struct HistoryButton: View {
 
     var body: some View {
         Button("Shot history") { showing = true }
-            .font(.headline)
-            .frame(maxWidth: .infinity, minHeight: 48)
+            .buttonStyle(CompactButtonStyle())
             .sheet(isPresented: $showing) { HistoryView() }
     }
 }
@@ -37,7 +35,7 @@ struct HistoryView: View {
                     VStack(alignment: .leading, spacing: 4) {
                         Text(title(shot)).font(.title3.bold())
                         Text(shot.capturedAt.formatted(date: .abbreviated, time: .shortened))
-                            .font(.subheadline).foregroundStyle(.secondary)
+                            .font(.body).foregroundStyle(Palette.secondaryText)
                     }
                     .padding(.vertical, 6)
                 }
@@ -77,14 +75,14 @@ struct CourseButton: View {
     @State private var showing = false
 
     var body: some View {
-        HStack {
+        AdaptiveStack(spacing: 8) {
             Button(model.round.isActive ? "Change course" : "Choose course and hole") { showing = true }
             if model.round.isActive {
-                Button("End round", role: .destructive) { model.round.end() }
+                Button("End round") { model.round.end() }
+                    .accessibilityHint("Stops the round. Your shots are kept.")
             }
         }
-        .font(.headline)
-        .frame(maxWidth: .infinity, minHeight: 48)
+        .buttonStyle(CompactButtonStyle())
         .sheet(isPresented: $showing) { CourseSheet() }
     }
 }

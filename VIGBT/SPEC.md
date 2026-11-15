@@ -1,5 +1,16 @@
 # Vision Impaired Golf Ball Tracker (VIGBT) — Master Technical & Commercial Specification
 
+Document version: 0.6.0 · Updated 2026-11-15 · Status: draft (not yet compiled or tested on a device)
+
+| Version | Date | Changes |
+|---|---|---|
+| 0.6.0 | 2026-11-15 | Versioning rules (§10); visual accessibility requirements (§11); low-vision ball highlight |
+| 0.5.0 | 2026-11-15 | Phase 5 built; Phase 4.4 learned search zone; §9 research |
+| 0.4.0 | 2026-11-15 | Phase 5 specified; §8 open-source policy; Apache-2.0 |
+| 0.3.0 | 2026-11-15 | Club selection (§6 note 3), simulated shots, shot history (§7) |
+| 0.2.0 | 2026-11-15 | §7 iOS app layer |
+| 0.1.0 | 2026-11-15 | Original specification; §5 data contracts and §6 engineering notes added |
+
 ## 1. Executive Summary & Product Vision
 
 VIGBT is an accessible, on-device iOS app for visually impaired and low-vision golfers. A tripod-mounted,
@@ -422,7 +433,8 @@ when its licence is compatible with Apache-2.0. Otherwise only the idea is used.
 
 ### 9.3 Backlog (prioritised)
 
-1. **Low-vision ball highlight** (from colour-filter finder apps). On the Homing screen, draw the live
+1. **Low-vision ball highlight** (from colour-filter finder apps). **Done in 0.6.0:** `BallHighlight` and
+   `HomingView`, with zoom up to 4×. On the Homing screen, draw the live
    colour mask as a bright, magnifiable overlay so low-vision golfers can see the ball as well as hear it.
 2. **External launch monitor input** (from PiTrac and OpenFlight). An optional input that takes launch data
    (`LaunchVector`, and spin when available) from a DIY or commercial launch monitor through an open, local
@@ -440,4 +452,53 @@ when its licence is compatible with Apache-2.0. Otherwise only the idea is used.
    ticks on the wrist so the phone can stay pointed at the ground.
 7. **Practice-range mode** (from Toptracer clinics). Capture and readouts only, with no walk or homing, for
    lessons and warm-ups.
+
+## 10. Versioning
+
+- **One version number for everything.** It follows Semantic Versioning (`MAJOR.MINOR.PATCH`). While the
+  major number is 0 the project is in development, and 1.0.0 will be the first release tested on real
+  devices.
+  - **MINOR** goes up for new features or spec sections.
+  - **PATCH** goes up for fixes and wording changes.
+  - **MAJOR** (from 1.0) goes up for changes that break saved data or the app's settings.
+- **Where the version must appear.** All of these are updated in the same commit:
+  - the `VIGBT/VERSION` file;
+  - `VIGBTVersion.string` in code;
+  - a new top entry in `CHANGELOG.md`;
+  - this document's "Document version" line, with a new row in the revision table;
+  - `MARKETING_VERSION` in `App/project.yml`.
+- **Build number.** `CURRENT_PROJECT_VERSION` in `App/project.yml` and `VIGBTVersion.build` go up by 1 for
+  every release. The App Store requires the build number to increase with each upload.
+- **Enforcement.** `tools/check_version.sh` (run in CI) and `VersioningTests` fail if any of these places
+  disagree.
+- **Saved data files.**
+  - Every JSON file the app writes (`shots.json`, `quota.json`, the course files, the club bag and the round
+    state) is wrapped as `{formatVersion, appVersion, savedAt, payload}`. The current format numbers are in
+    `DataFormat`.
+  - **Changing a file's shape:** bump that file's number and add a migration in `DataFormat.decode`.
+  - **Old files:** files from before this scheme (format 1, without the wrapper) are still read.
+  - **Newer files:** a file written by a newer app version is never overwritten. The app keeps it and asks
+    the golfer to update.
+- **Tags.** Each release is tagged `vX.Y.Z` on the commit that sets the version.
+- **Source files.** Individual source files do not carry version headers. Git history already records the
+  version of every file, and per-file headers tend to go out of date.
+
+## 11. Visual accessibility requirements
+
+These are the targets for every screen. The standard is WCAG 2.2: AAA for contrast and text size, and AA
+for everything else. Apple's accessibility guidelines also apply.
+
+| Requirement | Implementation |
+|---|---|
+| **Text contrast at least 7:1** (WCAG 1.4.6 AAA) | All colours come from `ThemePalette`. `AccessibilityTests` checks every text and background pair in both themes; the lowest ratio is 7.6:1. |
+| **Graphics contrast at least 3:1** (1.4.11) | Map features, the tracer, the pin and the outlines are tested against the background. A secondary button's fill can be below 3:1, so it always has a text-colour outline. |
+| **Not colour alone** (1.4.1) | Hazards are filled *and* patterned *and* labelled (water has wavy lines, bunkers are dotted, out of bounds is dashed). On-line or off-line guidance is spoken and shown as text, not only as arrow colour. |
+| **Themes** | High-contrast dark (yellow and white on black, the default), high-contrast light (black and blue on white), or "Match system". Set under Settings → Display. |
+| **Text size and reflow** (1.4.4, 1.4.10) | Only Dynamic Type text styles are used. Large numbers use `@ScaledMetric`. Every screen scrolls, and button rows switch to vertical layouts at accessibility text sizes (`AdaptiveStack`). |
+| **Bold Text and Increase Contrast** | Text styles pick up Bold Text automatically. With Increase Contrast, outlines get thicker. |
+| **Touch targets** (2.5.8) | Main buttons are at least 64 pt high and every other control at least 44 pt. |
+| **Reduce Motion** (2.3.3) | The replay tracer is shown complete and still instead of animating. |
+| **Smart Invert** | The camera preview, video, map and ball highlight are excluded from inversion. |
+| **Screen reader** | Headings, combined elements, hints, and announcements for status changes. Decorative images are hidden. |
+| **Low vision** | Ball highlight: a magnifiable view of the mask with a ring around the ball. Very large distance numbers on the Walk screen. |
 

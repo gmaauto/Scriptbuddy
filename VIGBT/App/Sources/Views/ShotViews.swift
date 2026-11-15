@@ -7,43 +7,47 @@ import VIGBTCore
 
 /// Loops the clip at 0.25× with a tracer through the validated centroids; the exit vector arrow
 /// is drawn once the tracer reaches the last centroid. VoiceOver reads the launch summary.
+/// With Reduce Motion on, nothing plays automatically and the tracer is shown complete.
 struct ReplayView: View {
     @Environment(AppModel.self) private var model
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var player: AVQueuePlayer?
     @State private var looper: AVPlayerLooper?
+    @State private var playing = false
 
     var body: some View {
-        ScrollView {
-            VStack(spacing: 16) {
-                ScreenTitle(text: model.currentShot?.launch == nil ? "Shot not measured" : "Your shot")
-                if let shot = model.currentShot {
-                    TracerPlayer(player: player,
-                                 centroids: shot.centroids,
-                                 impactTime: shot.clipImpactTime ?? 0,
-                                 frameRate: shot.clipFrameRate ?? 120,
-                                 imageSize: CGSize(width: shot.calibration.imageWidth,
-                                                   height: shot.calibration.imageHeight))
-                        .aspectRatio(16 / 9, contentMode: .fit)
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
-                        .accessibilityHidden(true)
+        Screen {
+            ScreenTitle(text: model.currentShot?.launch == nil ? "Shot not measured" : "Your shot")
+            if let shot = model.currentShot {
+                TracerPlayer(player: player,
+                             centroids: shot.centroids,
+                             impactTime: shot.clipImpactTime ?? 0,
+                             frameRate: shot.clipFrameRate ?? 120,
+                             imageSize: CGSize(width: shot.calibration.imageWidth,
+                                               height: shot.calibration.imageHeight))
+                    .aspectRatio(16 / 9, contentMode: .fit)
+                    .clipShape(RoundedRectangle(cornerRadius: 12))
+                    .accessibilityHidden(true)
+                if player != nil {
+                    Button(playing ? "Pause replay" : "Play slow-motion replay") { togglePlayback() }
+                        .buttonStyle(CompactButtonStyle())
                 }
-                Text(model.statusMessage)
-                    .font(.title3.bold())
-                    .multilineTextAlignment(.center)
-                    .accessibilityAddTraits(.isSummaryElement)
-                if let shot = model.currentShot, let launch = shot.launch {
-                    StatsGrid(launch: launch, landing: shot.landing)
-                }
-                if model.canWalk {
-                    BigButton(title: "Walk to ball", hint: "Starts audio guidance to the landing zone") { model.startWalk() }
-                } else if model.currentShot?.launch != nil, model.storeService.tier == .free {
-                    BigButton(title: "Unlock landing zone", hint: "Opens the Pro upgrade") { model.showPaywall = true }
-                }
-                BigButton(title: "Next shot (same tee)", prominent: !model.canWalk) { model.nextShotSameTee() }
-                BigButton(title: "New tee", prominent: false) { model.beginCalibration() }
-                HistoryButton()
             }
-            .padding()
+            Text(model.statusMessage)
+                .font(.title3.bold())
+                .multilineTextAlignment(.center)
+                .accessibilityAddTraits(.isSummaryElement)
+            if let shot = model.currentShot, let launch = shot.launch {
+                StatsList(launch: launch, landing: shot.landing)
+            }
+            if model.canWalk {
+                BigButton(title: "Walk to ball", hint: "Starts audio guidance to the landing zone") { model.startWalk() }
+            } else if model.currentShot?.launch != nil, model.storeService.tier == .free {
+                BigButton(title: "Unlock landing zone", hint: "Opens the Pro upgrade") { model.showPaywall = true }
+            }
+            BigButton(title: "Next shot (same tee)", prominent: !model.canWalk) { model.nextShotSameTee() }
+            BigButton(title: "New tee", prominent: false) { model.beginCalibration() }
+            HistoryButton()
         }
         .onAppear(perform: setUpPlayer)
         .onChange(of: model.currentShot?.id) { setUpPlayer() }
@@ -58,23 +62,30 @@ struct ReplayView: View {
         player?.pause()
         looper = nil
         player = nil
+        playing = false
         guard let url = model.currentClipURL else { return }
-        let item = AVPlayerItem(url: url)
         let p = AVQueuePlayer()
         p.isMuted = true
-        looper = AVPlayerLooper(player: p, templateItem: item)
+        looper = AVPlayerLooper(player: p, templateItem: AVPlayerItem(url: url))
         p.defaultRate = 0.25
-        p.play()
         player = p
+        if !reduceMotion { togglePlayback() }
+    }
+
+    private func togglePlayback() {
+        guard let p = player else { return }
+        if playing { p.pause() } else { p.play() }
+        playing.toggle()
     }
 }
 
-struct StatsGrid: View {
+/// Label/value rows that stack vertically at accessibility text sizes.
+struct StatsList: View {
     let launch: LaunchVector
     let landing: LandingEstimate?
 
     var body: some View {
-        Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
             row("Ball speed", String(format: "%.0f mph", launch.ballSpeedMph))
             row("Launch angle", String(format: "%.0f°", launch.launchAngleDeg))
             row("Direction", direction(launch.azimuthDeg))
@@ -85,12 +96,17 @@ struct StatsGrid: View {
             }
         }
         .font(.title3)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding()
+        .background(RoundedRectangle(cornerRadius: 12).fill(Palette.surface))
     }
 
     private func row(_ label: String, _ value: String) -> some View {
-        GridRow {
-            Text(label).foregroundStyle(.secondary)
+        AdaptiveStack(spacing: 4) {
+            Text(label).foregroundStyle(Palette.secondaryText)
+                .frame(maxWidth: .infinity, alignment: .leading)
             Text(value).bold()
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
         .accessibilityElement(children: .combine)
     }
@@ -105,6 +121,7 @@ struct StatsGrid: View {
 }
 
 /// Video layer + Canvas overlay. Centroids are in capture-pixel coordinates.
+/// The tracer is drawn yellow over a black halo so it stays ≥ 3:1 against any video content.
 struct TracerPlayer: View {
     /// nil for simulated shots: the tracer then animates on its own 0.25× clock over a black frame.
     let player: AVPlayer?
@@ -112,6 +129,10 @@ struct TracerPlayer: View {
     let impactTime: Double
     let frameRate: Double
     let imageSize: CGSize
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    private static let tracer = Color(UIColor(ThemePalette.highContrastDark.accent))
+    private static let arrow = Color(UIColor(ThemePalette.highContrastDark.warning))
 
     var body: some View {
         GeometryReader { geo in
@@ -121,15 +142,17 @@ struct TracerPlayer: View {
                 } else {
                     Color.black
                 }
-                TimelineView(.animation) { timeline in
+                TimelineView(.animation(paused: reduceMotion)) { timeline in
                     Canvas { ctx, size in draw(in: &ctx, size: size, frame: currentFrame(at: timeline.date)) }
                 }
             }
             .frame(width: geo.size.width, height: geo.size.height)
         }
+        .accessibilityIgnoresInvertColors()
     }
 
     private func currentFrame(at date: Date) -> Int {
+        if reduceMotion { return .max } // still image of the complete tracer
         if let player {
             return Int(((player.currentTime().seconds - impactTime) * frameRate).rounded(.down))
         }
@@ -160,9 +183,11 @@ struct TracerPlayer: View {
             let c2 = CGPoint(x: p2.x - (p3.x - p1.x) / 6, y: p2.y - (p3.y - p1.y) / 6)
             path.addCurve(to: p2, control1: c1, control2: c2)
         }
-        ctx.stroke(path, with: .color(.yellow), style: StrokeStyle(lineWidth: 4, lineCap: .round, lineJoin: .round))
+        let style = StrokeStyle(lineWidth: 5, lineCap: .round, lineJoin: .round)
+        ctx.stroke(path, with: .color(.black), style: StrokeStyle(lineWidth: 10, lineCap: .round, lineJoin: .round))
+        ctx.stroke(path, with: .color(Self.tracer), style: style)
         for p in pts {
-            ctx.fill(Path(ellipseIn: CGRect(x: p.x - 3, y: p.y - 3, width: 6, height: 6)), with: .color(.white))
+            ctx.fill(Path(ellipseIn: CGRect(x: p.x - 4, y: p.y - 4, width: 8, height: 8)), with: .color(.white))
         }
 
         // Exit-vector arrow once the whole track is shown.
@@ -177,7 +202,8 @@ struct TracerPlayer: View {
             arrow.move(to: CGPoint(x: tip.x - ux * 14 - uy * 9, y: tip.y - uy * 14 + ux * 9))
             arrow.addLine(to: tip)
             arrow.addLine(to: CGPoint(x: tip.x - ux * 14 + uy * 9, y: tip.y - uy * 14 - ux * 9))
-            ctx.stroke(arrow, with: .color(.orange), style: StrokeStyle(lineWidth: 5, lineCap: .round))
+            ctx.stroke(arrow, with: .color(.black), style: StrokeStyle(lineWidth: 10, lineCap: .round))
+            ctx.stroke(arrow, with: .color(Self.arrow), style: StrokeStyle(lineWidth: 5, lineCap: .round))
         }
     }
 }
@@ -186,34 +212,40 @@ struct TracerPlayer: View {
 
 struct WalkView: View {
     @Environment(AppModel.self) private var model
+    @ScaledMetric(relativeTo: .largeTitle) private var bigNumber: CGFloat = 96
+    @ScaledMetric(relativeTo: .largeTitle) private var arrowSize: CGFloat = 88
 
     var body: some View {
-        VStack(spacing: 24) {
+        Screen {
             ScreenTitle(text: "Walking to your ball")
             if let g = model.guidance {
                 Text(String(format: "%.0f", g.distanceRemainingYards))
-                    .font(.system(size: 120, weight: .black, design: .rounded))
+                    .font(.system(size: bigNumber, weight: .black, design: .rounded))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.5)
                     .accessibilityLabel(Readout.distance(yards: g.distanceRemainingYards))
                 Text("yards").font(.title)
                     .accessibilityHidden(true)
-                Image(systemName: "arrow.up")
-                    .font(.system(size: 120, weight: .bold))
+                Image(systemName: g.alignment == .onLine ? "arrow.up.circle.fill" : "arrow.up")
+                    .font(.system(size: arrowSize, weight: .bold))
                     .rotationEffect(.degrees(g.headingErrorDeg))
-                    .foregroundStyle(g.alignment == .onLine ? Palette.accent : Palette.warning)
+                    .foregroundStyle(g.alignment == .onLine ? Palette.success : Palette.warning)
                     .accessibilityLabel(alignmentText(g))
-                Text(alignmentText(g)).font(.title2.bold())
+                // Direction is always stated in words too, never by colour alone.
+                Text(alignmentText(g)).font(.title.bold())
+                    .multilineTextAlignment(.center)
                     .accessibilityHidden(true)
             } else {
-                ProgressView("Finding your position…").controlSize(.large)
+                ProgressView("Finding your position…")
+                    .controlSize(.large)
+                    .font(.title3)
             }
-            Spacer()
             BigButton(title: "Repeat distance", hint: "Speaks distance and direction") { model.repeatDistance() }
             BigButton(title: "Scan ground now", hint: "Starts the close-range ball finder", prominent: false) {
                 model.startHoming()
             }
             BigButton(title: "End", prominent: false) { model.nextShotSameTee() }
         }
-        .padding()
     }
 
     private func alignmentText(_ g: NavigationGuidance) -> String {
@@ -229,25 +261,54 @@ struct WalkView: View {
 
 struct HomingView: View {
     @Environment(AppModel.self) private var model
+    @State private var zoom: CGFloat = 1
 
     var body: some View {
-        VStack(spacing: 20) {
+        Screen {
             ScreenTitle(text: "Finding your ball")
-            CameraPreview(session: model.scanner.session)
-                .aspectRatio(3 / 4, contentMode: .fit)
-                .overlay(Circle().stroke(Palette.accent, lineWidth: 3).frame(width: 80, height: 80))
-                .clipShape(RoundedRectangle(cornerRadius: 12))
-                .accessibilityHidden(true)
+            ZStack {
+                CameraPreview(session: model.scanner.session)
+                    .opacity(showHighlight ? 0 : 1)
+                if showHighlight, let image = model.highlightImage {
+                    // Sensor-native landscape buffer → rotate for the portrait UI.
+                    Image(decorative: image, scale: 1, orientation: .right)
+                        .resizable()
+                        .interpolation(.none)
+                        .scaledToFill()
+                        .scaleEffect(zoom)
+                }
+            }
+            .aspectRatio(3 / 4, contentMode: .fit)
+            .overlay(Circle().stroke(Palette.accent, lineWidth: 4).frame(width: 80, height: 80))
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .accessibilityHidden(true)
+            .accessibilityIgnoresInvertColors()
+
             Text(model.homingStatus)
                 .font(.title2.bold())
+                .multilineTextAlignment(.center)
                 .accessibilityAddTraits(.updatesFrequently)
             Text("Faster ticks mean the ball is closer to the centre.").font(.body)
-            Spacer()
+
+            if model.ballHighlightEnabled {
+                AdaptiveStack(spacing: 8) {
+                    Button("Zoom out") { zoom = max(1, zoom - 1) }
+                        .disabled(zoom <= 1)
+                    Text("Zoom \(Int(zoom))×").font(.headline)
+                        .frame(minWidth: 80)
+                    Button("Zoom in") { zoom = min(4, zoom + 1) }
+                        .disabled(zoom >= 4)
+                }
+                .buttonStyle(CompactButtonStyle())
+                .accessibilityElement(children: .contain)
+                .accessibilityLabel("Ball highlight zoom")
+            }
             BigButton(title: "I found it") { model.ballFound() }
             BigButton(title: "Back to walking guidance", prominent: false) { model.backToWalking() }
         }
-        .padding()
     }
+
+    private var showHighlight: Bool { model.ballHighlightEnabled && model.highlightImage != nil }
 }
 
 // MARK: - Paywall
@@ -257,17 +318,19 @@ struct PaywallView: View {
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 20) {
+        Screen {
             ScreenTitle(text: "VIGBT Pro")
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 12) {
                 Label("Unlimited shots", systemImage: "infinity")
                 Label("Carry distance and landing zone", systemImage: "scope")
                 Label("Walk-to-ball spatial audio guidance", systemImage: "ear")
                 Label("Haptic ball finder", systemImage: "hand.tap")
+                Label("Club recommendations", systemImage: "flag")
             }
             .font(.title3)
-            Text("One-time purchase. No subscription. Works offline.").font(.headline)
-            Spacer()
+            .frame(maxWidth: .infinity, alignment: .leading)
+            Text("One-time purchase. No subscription. Works offline. VIGBT is open source: buying it supports development.")
+                .font(.headline)
             BigButton(title: buyTitle) {
                 Task {
                     await model.storeService.purchase()
@@ -284,8 +347,7 @@ struct PaywallView: View {
             BigButton(title: "Not now", prominent: false) { dismiss() }
             if let err = model.storeService.lastError { Text(err).foregroundStyle(Palette.warning) }
         }
-        .padding()
-        .background(Palette.background)
+        .background(Palette.background.ignoresSafeArea())
         .foregroundStyle(Palette.text)
     }
 
