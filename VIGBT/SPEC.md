@@ -160,9 +160,10 @@ on macOS, the iOS Simulator and Linux CI. The iOS app layer adapts framework typ
    fitting on the contour is required.
 3. **Spin heuristic accuracy.** `2200 + 140·θ` matches drivers (about 3.7k rpm at 11°) but underestimates
    irons. A tour 7-iron at 16° gives about 4.4k rpm against a real ~7k. Low spin flies longer, so iron carry
-   reads long by about 10–15%. The 8% search radius partly absorbs this. A club-selection control (driver /
-   wood / iron / wedge → spin table) is a cheap upgrade and is supported through the optional
-   `SpinEstimate` parameter.
+   reads long by about 10–15%. The 8% search radius partly absorbs this. **Implemented:** a `Club` picker on
+   the Ready screen uses typical tour spin per club (driver 2.7k … wedge 8.5k rpm, clamped to the spec's
+   bounds). `.auto` keeps the formula. With the mid-iron setting, a tour 7-iron carries 174 yd, against
+   187 yd from the formula and 172 yd measured on tour.
 4. **Aerodynamic coefficients.** `C_d = 0.18 + 0.30·S`, `C_l = min(0.25, 0.08 + 0.60·S)`, `S = rω/|v|`,
    with spin decay time constant τ = 25 s. Fitted against PGA Tour TrackMan averages, the model gives driver
    272 yd (tour 275), 7-iron 173 (172), PW 130 (136) and 3-wood 253 (243).
@@ -198,6 +199,16 @@ Info.plist additions beyond §2.2: `NSMotionUsageDescription` (the pedometer nee
 `UIBackgroundModes` `audio` + `location` (guidance keeps running with the screen locked; App Review will
 ask for this justification). `VIGBT.storekit` lets the purchase be tested in the simulator and on a device
 without App Store Connect.
+
+**Simulated shot.** `ShotSimulator` (core) generates a physically consistent calibration and per-frame
+detections, including the vacated tee spot and club-head distractors, from a random launch. The whole
+pipeline then runs: tracking, extraction, ballistics, replay tracer, walk-to-ball and paywall. This works
+in the iOS Simulator with no camera, LiDAR or ball. Simulated shots do not count toward the free-tier
+limit. In the Simulator, walking guidance falls back to GPS course, or to "on line", when there is no
+compass. Drive the walk with an Xcode GPX route.
+
+**Shot history** lists the last 30 shots, each with its club, carry and date. Each one reopens in replay
+and supports walk-to-ball.
 
 **Not yet verified on hardware:**
 - 1080p120 availability on the Ultra-Wide of each supported model.

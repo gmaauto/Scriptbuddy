@@ -127,4 +127,19 @@ final class PipelineTests: XCTestCase {
         let l = LaunchVector(ballSpeed: Units.metersPerSecond(fromMph: 150), launchAngleDeg: 12, azimuthDeg: -4)
         XCTAssertEqual(Readout.launch(l), "Ball speed 150 miles per hour. Launch angle 12 degrees. Direction 4 degrees left.")
     }
+
+    func testSimulatedShotRoundTripsThroughAnalyzer() throws {
+        let truth = LaunchVector(ballSpeed: Units.metersPerSecond(fromMph: 130), launchAngleDeg: 14, azimuthDeg: -3)
+        let sim = ShotSimulator.make(launch: truth, teeLocation: GeoCoordinate(latitude: 52, longitude: 4),
+                                     cameraHeadingDeg: 300)
+        let a = ShotAnalyzer().analyze(frames: sim.frames, calibration: sim.calibration,
+                                       referenceRadiusPixels: sim.referenceRadiusPixels, includeBallistics: true,
+                                       club: .midIron)
+        let launch = try XCTUnwrap(a.launch, a.failureReason ?? "")
+        XCTAssertEqual(launch.ballSpeed, truth.ballSpeed, accuracy: 1e-6)
+        XCTAssertEqual(launch.launchAngleDeg, 14, accuracy: 1e-6)
+        XCTAssertEqual(launch.azimuthDeg, -3, accuracy: 1e-6)
+        XCTAssertEqual(a.spin?.rpm, 6_700)
+        XCTAssertLessThan(try XCTUnwrap(a.landing).lateralMeters, 0, "pulled left")
+    }
 }

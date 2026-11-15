@@ -16,13 +16,13 @@ struct ReplayView: View {
         ScrollView {
             VStack(spacing: 16) {
                 ScreenTitle(text: model.currentShot?.launch == nil ? "Shot not measured" : "Your shot")
-                if let player {
+                if let shot = model.currentShot {
                     TracerPlayer(player: player,
-                                 centroids: model.currentShot?.centroids ?? [],
-                                 impactTime: model.clipImpactTime,
-                                 frameRate: model.clipFrameRate,
-                                 imageSize: CGSize(width: model.calibration?.imageWidth ?? 1920,
-                                                   height: model.calibration?.imageHeight ?? 1080))
+                                 centroids: shot.centroids,
+                                 impactTime: shot.clipImpactTime ?? 0,
+                                 frameRate: shot.clipFrameRate ?? 120,
+                                 imageSize: CGSize(width: shot.calibration.imageWidth,
+                                                   height: shot.calibration.imageHeight))
                         .aspectRatio(16 / 9, contentMode: .fit)
                         .clipShape(RoundedRectangle(cornerRadius: 12))
                         .accessibilityHidden(true)
@@ -41,10 +41,12 @@ struct ReplayView: View {
                 }
                 BigButton(title: "Next shot (same tee)", prominent: !model.canWalk) { model.nextShotSameTee() }
                 BigButton(title: "New tee", prominent: false) { model.beginCalibration() }
+                HistoryButton()
             }
             .padding()
         }
         .onAppear(perform: setUpPlayer)
+        .onChange(of: model.currentShot?.id) { setUpPlayer() }
         .onDisappear {
             player?.pause()
             looper = nil
@@ -53,6 +55,9 @@ struct ReplayView: View {
     }
 
     private func setUpPlayer() {
+        player?.pause()
+        looper = nil
+        player = nil
         guard let url = model.currentClipURL else { return }
         let item = AVPlayerItem(url: url)
         let p = AVQueuePlayer()
@@ -101,7 +106,8 @@ struct StatsGrid: View {
 
 /// Video layer + Canvas overlay. Centroids are in capture-pixel coordinates.
 struct TracerPlayer: View {
-    let player: AVPlayer
+    /// nil for simulated shots: the tracer then animates on its own 0.25× clock over a black frame.
+    let player: AVPlayer?
     let centroids: [TrackedCentroid]
     let impactTime: Double
     let frameRate: Double
@@ -110,16 +116,30 @@ struct TracerPlayer: View {
     var body: some View {
         GeometryReader { geo in
             ZStack {
-                PlayerLayerView(player: player)
-                TimelineView(.animation) { _ in
-                    Canvas { ctx, size in draw(in: &ctx, size: size) }
+                if let player {
+                    PlayerLayerView(player: player)
+                } else {
+                    Color.black
+                }
+                TimelineView(.animation) { timeline in
+                    Canvas { ctx, size in draw(in: &ctx, size: size, frame: currentFrame(at: timeline.date)) }
                 }
             }
             .frame(width: geo.size.width, height: geo.size.height)
         }
     }
 
-    private func draw(in ctx: inout GraphicsContext, size: CGSize) {
+    private func currentFrame(at date: Date) -> Int {
+        if let player {
+            return Int(((player.currentTime().seconds - impactTime) * frameRate).rounded(.down))
+        }
+        // Synthetic loop: 0.25× speed, then hold the finished tracer for ~2 s before repeating.
+        let span = Double((centroids.last?.frameOffset ?? 0) + 60)
+        let f = (date.timeIntervalSinceReferenceDate * 0.25 * frameRate).truncatingRemainder(dividingBy: span)
+        return Int(f)
+    }
+
+    private func draw(in ctx: inout GraphicsContext, size: CGSize, frame: Int) {
         guard centroids.count >= 2 else { return }
         // Aspect-fit mapping from image pixels to view points.
         let scale = min(size.width / imageSize.width, size.height / imageSize.height)
@@ -127,8 +147,6 @@ struct TracerPlayer: View {
         let oy = (size.height - imageSize.height * scale) / 2
         func pt(_ c: TrackedCentroid) -> CGPoint { CGPoint(x: ox + c.x * scale, y: oy + c.y * scale) }
 
-        let now = player.currentTime().seconds
-        let frame = Int(((now - impactTime) * frameRate).rounded(.down))
         let visible = centroids.filter { $0.frameOffset <= frame }
         guard let first = visible.first else { return }
 

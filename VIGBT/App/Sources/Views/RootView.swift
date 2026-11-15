@@ -149,6 +149,10 @@ struct SetupView: View {
             if !model.statusMessage.isEmpty {
                 Text(model.statusMessage).font(.headline)
             }
+            HStack {
+                SimulatedShotButton()
+                HistoryButton()
+            }
         }
         .padding()
         .onAppear {
@@ -190,11 +194,16 @@ struct ArmedView: View {
             if model.storeService.tier == .free {
                 Text("\(model.shotsLeftToday) free shots left today").font(.headline)
             }
+            ClubPicker()
             Spacer()
             BigButton(title: "Test Strike", hint: "Simulates the sound of a strike to test recording", prominent: false) {
                 model.testStrike()
             }
             BigButton(title: "Recalibrate", prominent: false) { model.beginCalibration() }
+            HStack {
+                SimulatedShotButton()
+                HistoryButton()
+            }
         }
         .padding()
     }

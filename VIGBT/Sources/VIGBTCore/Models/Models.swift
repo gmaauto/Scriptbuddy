@@ -334,14 +334,20 @@ public struct ShotRecord: Codable, Identifiable, Equatable, Sendable {
     public var spin: SpinEstimate?
     public var trajectory: TrajectorySolution?
     public var landing: LandingEstimate?
-    /// File name of the trimmed .mov clip inside the app's caches directory.
+    /// File name of the trimmed .mov clip inside the app's clips directory (nil for simulated shots).
     public var clipFileName: String?
+    public var club: Club?
+    /// Impact time T0 on the clip's timeline, and the clip frame rate, for the replay tracer.
+    public var clipImpactTime: Double?
+    public var clipFrameRate: Double?
+    public var isSimulated: Bool?
 
     public init(id: UUID = UUID(), capturedAt: Date = Date(), ballProfile: BallColorProfile,
                 calibration: TeeCalibration, centroids: [TrackedCentroid] = [],
                 launch: LaunchVector? = nil, spin: SpinEstimate? = nil,
                 trajectory: TrajectorySolution? = nil, landing: LandingEstimate? = nil,
-                clipFileName: String? = nil) {
+                clipFileName: String? = nil, club: Club? = nil, clipImpactTime: Double? = nil,
+                clipFrameRate: Double? = nil, isSimulated: Bool? = nil) {
         self.id = id
         self.capturedAt = capturedAt
         self.ballProfile = ballProfile
@@ -352,6 +358,10 @@ public struct ShotRecord: Codable, Identifiable, Equatable, Sendable {
         self.trajectory = trajectory
         self.landing = landing
         self.clipFileName = clipFileName
+        self.club = club
+        self.clipImpactTime = clipImpactTime
+        self.clipFrameRate = clipFrameRate
+        self.isSimulated = isSimulated
     }
 }
 

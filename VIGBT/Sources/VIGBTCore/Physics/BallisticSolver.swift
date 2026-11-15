@@ -44,6 +44,49 @@ public enum SpinEstimator {
         let rpm = min(maximumRPM, max(minimumRPM, 2_200 + 140 * launchAngleDeg))
         return SpinEstimate(rpm: rpm, axisTiltDeg: axisTiltDeg)
     }
+
+    /// Club-aware estimate. The launch-angle formula underestimates iron spin (7-iron ≈ 4.4k vs ≈ 7k rpm
+    /// measured), which makes irons read 10–15% long; a known club uses its typical spin instead.
+    public static func estimate(club: Club, launchAngleDeg: Double, axisTiltDeg: Double = 0) -> SpinEstimate {
+        guard let rpm = club.typicalSpinRPM else {
+            return estimate(launchAngleDeg: launchAngleDeg, axisTiltDeg: axisTiltDeg)
+        }
+        return SpinEstimate(rpm: min(maximumRPM, max(minimumRPM, rpm)), axisTiltDeg: axisTiltDeg)
+    }
+}
+
+/// Club selection for spin estimation. `.auto` falls back to the launch-angle heuristic.
+public enum Club: String, Codable, CaseIterable, Identifiable, Sendable {
+    case auto, driver, fairwayWood, hybrid, longIron, midIron, shortIron, wedge
+
+    public var id: String { rawValue }
+
+    public var displayName: String {
+        switch self {
+        case .auto: return "Automatic"
+        case .driver: return "Driver"
+        case .fairwayWood: return "Fairway wood"
+        case .hybrid: return "Hybrid"
+        case .longIron: return "Long iron (3 to 5)"
+        case .midIron: return "Mid iron (6 to 7)"
+        case .shortIron: return "Short iron (8 to 9)"
+        case .wedge: return "Wedge"
+        }
+    }
+
+    /// Typical backspin, from published PGA Tour TrackMan averages (wedge clamped by the estimator).
+    public var typicalSpinRPM: Double? {
+        switch self {
+        case .auto: return nil
+        case .driver: return 2_700
+        case .fairwayWood: return 3_650
+        case .hybrid: return 4_400
+        case .longIron: return 5_000
+        case .midIron: return 6_700
+        case .shortIron: return 8_300
+        case .wedge: return 9_300
+        }
+    }
 }
 
 /// 3D aerodynamic trajectory solver: gravity + quadratic drag + Magnus lift, integrated with

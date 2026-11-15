@@ -44,6 +44,11 @@ final class ShotStore {
         set { defaults.set(try? JSONEncoder().encode(newValue), forKey: "colorProfile") }
     }
 
+    var club: Club {
+        get { defaults.string(forKey: "club").flatMap(Club.init(rawValue:)) ?? .auto }
+        set { defaults.set(newValue.rawValue, forKey: "club") }
+    }
+
     func recordShotTaken(at date: Date = Date()) {
         quota.record(at: date)
         save(quota, "quota.json")
@@ -61,7 +66,9 @@ final class ShotStore {
     }
 
     func clipURL(for shot: ShotRecord) -> URL? {
-        shot.clipFileName.map { Self.clipsDirectory.appendingPathComponent($0) }
+        guard let name = shot.clipFileName else { return nil }
+        let url = Self.clipsDirectory.appendingPathComponent(name)
+        return FileManager.default.fileExists(atPath: url.path) ? url : nil
     }
 
     private func load<T: Decodable>(_ type: T.Type, _ name: String) -> T? {

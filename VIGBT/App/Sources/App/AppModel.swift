@@ -15,8 +15,6 @@ final class AppModel {
     private(set) var calibration: TeeCalibration?
     private(set) var currentShot: ShotRecord?
     private(set) var currentClipURL: URL?
-    private(set) var clipImpactTime: Double = 0
-    private(set) var clipFrameRate: Double = 120
     private(set) var guidance: NavigationGuidance?
     private(set) var homingStatus = "Searching"
     private(set) var statusMessage = ""
@@ -24,6 +22,10 @@ final class AppModel {
     var showPaywall = false
     var profile: BallColorProfile {
         didSet { store.colorProfile = profile }
+    }
+    /// Club in hand, used for spin estimation (Section 6, note 3).
+    var club: Club {
+        didSet { store.club = club }
     }
 
     // MARK: Services
@@ -50,6 +52,7 @@ final class AppModel {
         let s = ShotStore()
         needsOnboarding = !s.hasAcceptedDisclaimer
         profile = s.colorProfile
+        club = s.club
         wireCallbacks()
     }
 
@@ -166,39 +169,72 @@ final class AppModel {
     private func analyze(_ clip: CapturedClip) {
         guard let cal = calibration else { return }
         let profile = profile
+        let club = club
         let ballistics = gate.isEnabled(.ballisticEstimation)
         analysisTask = Task {
             do {
                 let out = try await Task.detached(priority: .userInitiated) {
                     try await ClipAnalysisService.analyze(clip: clip, calibration: cal, profile: profile,
-                                                          includeBallistics: ballistics)
+                                                          includeBallistics: ballistics, club: club)
                 }.value
                 let a = out.analysis
                 let shot = ShotRecord(ballProfile: profile, calibration: cal, centroids: a.centroids,
                                       launch: a.launch, spin: a.spin, trajectory: a.trajectory,
-                                      landing: a.landing, clipFileName: clip.url.lastPathComponent)
+                                      landing: a.landing, clipFileName: clip.url.lastPathComponent, club: club,
+                                      clipImpactTime: clip.impactTime, clipFrameRate: clip.frameRate)
                 store.add(shot)
-                currentShot = shot
-                currentClipURL = clip.url
-                clipImpactTime = clip.impactTime
-                clipFrameRate = clip.frameRate
-                phase = .replay
-                if let launch = a.launch {
-                    var text = Readout.launch(launch)
-                    if let landing = a.landing { text += " " + Readout.landing(landing) }
-                    else if !ballistics { text += " Unlock Pro to estimate where the ball landed." }
-                    statusMessage = text
-                    speak(text)
-                } else {
-                    let why = a.failureReason ?? "The shot could not be measured."
-                    statusMessage = why
-                    speak(why)
-                }
+                present(shot, analysis: a, clipURL: clip.url)
             } catch {
                 report(error)
                 arm()
             }
         }
+    }
+
+    private func present(_ shot: ShotRecord, analysis a: ShotAnalysis?, clipURL: URL?) {
+        currentShot = shot
+        currentClipURL = clipURL
+        phase = .replay
+        var text = shot.isSimulated == true ? "Simulated shot. " : ""
+        if let launch = shot.launch {
+            text += Readout.launch(launch)
+            if let landing = shot.landing { text += " " + Readout.landing(landing) }
+            else if !gate.isEnabled(.ballisticEstimation) { text += " Unlock Pro to estimate where the ball landed." }
+        } else {
+            text += a?.failureReason ?? "The shot could not be measured."
+        }
+        statusMessage = text
+        speak(text)
+    }
+
+    // MARK: Simulated shot & history
+
+    /// Runs the full pipeline on a synthetic shot: works in the Simulator and needs no ball, camera or LiDAR.
+    /// Does not count toward the free-tier daily limit.
+    func runSimulatedShot() {
+        stopEverything()
+        let launch = LaunchVector(ballSpeed: Units.metersPerSecond(fromMph: .random(in: 95...150)),
+                                  launchAngleDeg: .random(in: 10...20), azimuthDeg: .random(in: -5...5))
+        let tee = location.teeFix
+            ?? location.lastFix.map { GeoCoordinate(latitude: $0.coordinate.latitude, longitude: $0.coordinate.longitude) }
+            ?? GeoCoordinate(latitude: 37.3349, longitude: -122.0090) // Simulator's default location
+        let sim = ShotSimulator.make(launch: launch, teeLocation: tee, cameraHeadingDeg: location.heading ?? 0)
+        let a = ShotAnalyzer().analyze(frames: sim.frames, calibration: sim.calibration,
+                                       referenceRadiusPixels: sim.referenceRadiusPixels,
+                                       includeBallistics: gate.isEnabled(.ballisticEstimation), club: club)
+        calibration = sim.calibration
+        let shot = ShotRecord(ballProfile: profile, calibration: sim.calibration, centroids: a.centroids,
+                              launch: a.launch, spin: a.spin, trajectory: a.trajectory, landing: a.landing,
+                              club: club, clipFrameRate: 120, isSimulated: true)
+        store.add(shot)
+        present(shot, analysis: a, clipURL: nil)
+    }
+
+    var shots: [ShotRecord] { store.shots }
+
+    func open(_ shot: ShotRecord) {
+        stopEverything()
+        present(shot, analysis: nil, clipURL: store.clipURL(for: shot))
     }
 
     // MARK: Walk to ball (Phase 3)
@@ -210,7 +246,8 @@ final class AppModel {
             showPaywall = true
             return
         }
-        guard let target = currentShot?.landing?.target, let cal = calibration else { return }
+        guard let shot = currentShot, let target = shot.landing?.target else { return }
+        let cal = shot.calibration
         AudioSessionMode.guidance.apply()
         var engine = NavigationEngine(target: target)
         engine.begin(from: cal.teeLocation)
@@ -223,8 +260,10 @@ final class AppModel {
     }
 
     private func navigationTick() {
-        guard phase == .navigating, var nav = navigation,
-              let position = location.smoothedPosition, let heading = location.heading else { return }
+        guard phase == .navigating, var nav = navigation, let position = location.smoothedPosition else { return }
+        // Compass first; then GPS course while walking; with neither (e.g. the Simulator) assume on line.
+        let course = location.lastFix.flatMap { $0.course >= 0 && $0.speed > 0.3 ? $0.course : nil }
+        let heading = location.heading ?? course ?? GeoMath.bearing(from: position, to: nav.target.coordinate)
         let g = nav.update(position: position, headingDeg: heading)
         navigation = nav
         guidance = g

@@ -66,7 +66,7 @@ public struct ShotAnalyzer: Sendable {
     ///   - includeBallistics: false on the free tier (launch readout only).
     public func analyze(frames: [[DetectionCandidate]], calibration: TeeCalibration,
                         referenceRadiusPixels: Double?, includeBallistics: Bool,
-                        spin: SpinEstimate? = nil, wind: Vector3 = .zero) -> ShotAnalysis {
+                        club: Club = .auto, spin: SpinEstimate? = nil, wind: Vector3 = .zero) -> ShotAnalysis {
         let expected = referenceRadiusPixels ?? CameraPose.expectedBallRadiusPixels(calibration: calibration)
         let gated = frames.map { sizeGate($0, expectedRadius: expected) }
         let track = tracker.track(frames: gated)
@@ -80,6 +80,7 @@ public struct ShotAnalyzer: Sendable {
             }
             result.launch = launch
             if includeBallistics {
+                let spin = spin ?? SpinEstimator.estimate(club: club, launchAngleDeg: launch.launchAngleDeg)
                 let est = estimator.estimate(launch: launch, calibration: calibration, spin: spin, wind: wind)
                 result.spin = est.spin
                 result.trajectory = est.trajectory
@@ -93,6 +94,44 @@ public struct ShotAnalyzer: Sendable {
             result.failureReason = "The ball's launch could not be measured. Please try again."
         }
         return result
+    }
+}
+
+// MARK: - Simulated shots
+
+/// Generates a physically consistent fake shot (calibration + per-frame detections) so the full
+/// pipeline, replay, navigation and paywall can be exercised in the iOS Simulator or without a ball.
+public enum ShotSimulator {
+    public struct Output: Sendable {
+        public var calibration: TeeCalibration
+        public var frames: [[DetectionCandidate]]
+        public var referenceRadiusPixels: Double
+    }
+
+    /// Down-the-line tripod: 1.1 m high, tee 3 m ahead and slightly right, Ultra-Wide 108° FOV.
+    public static func make(launch: LaunchVector, teeLocation: GeoCoordinate, cameraHeadingDeg: Double,
+                            frames: Int = 16) -> Output {
+        let teeWorld = Vector3(3.0, -0.25, -1.1)
+        let pitch = -atan2(1.1, 3.0)
+        var cal = TeeCalibration(distanceToTeeMeters: 1, cameraPitchRadians: pitch, cameraRollRadians: 0,
+                                 cameraHeadingDeg: cameraHeadingDeg, horizontalFOVRadians: Units.radians(108),
+                                 teeLocation: teeLocation)
+        let synth = LaunchVectorExtractor.synthesizeCentroids(launch: launch, calibration: cal,
+                                                              teeWorldPosition: teeWorld, frames: 1...frames)
+        cal.distanceToTeeMeters = cal.focalLengthPixels * 0.021335 / synth.referenceRadius
+        let detections: [[DetectionCandidate]] = synth.centroids.map { c in
+            let inFrame = c.x >= 0 && c.x < cal.imageWidth && c.y >= 0 && c.y < cal.imageHeight
+            let ball = DetectionCandidate(centerX: c.x, centerY: c.y, width: 2 * c.radiusPixels,
+                                          height: 2 * c.radiusPixels, colorMatchFraction: 0.9)
+            // The vacated tee spot and the club head always show up in the motion mask too.
+            let teeSpot = DetectionCandidate(centerX: synth.centroids[0].x - 40, centerY: synth.centroids[0].y + 30,
+                                             width: 2 * synth.referenceRadius, height: 2 * synth.referenceRadius,
+                                             colorMatchFraction: 0.1)
+            let club = DetectionCandidate(centerX: cal.imageWidth / 2, centerY: cal.imageHeight * 0.8,
+                                          width: 90, height: 40, colorMatchFraction: 0)
+            return inFrame ? [club, teeSpot, ball] : [club]
+        }
+        return Output(calibration: cal, frames: detections, referenceRadiusPixels: synth.referenceRadius)
     }
 }
 

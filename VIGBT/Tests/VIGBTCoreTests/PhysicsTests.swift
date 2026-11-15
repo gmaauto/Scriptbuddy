@@ -92,4 +92,14 @@ final class PhysicsTests: XCTestCase {
         let d = GeoMath.distance(from: tee, to: result.landing.target.coordinate)
         XCTAssertEqual(d, result.trajectory.carryMeters, accuracy: 0.01)
     }
+
+    func testClubSelectionFixesIronCarry() {
+        let launch = LaunchVector(ballSpeed: Units.metersPerSecond(fromMph: 120), launchAngleDeg: 16.3, azimuthDeg: 0)
+        let auto = solver.solve(launch: launch, spin: SpinEstimator.estimate(club: .auto, launchAngleDeg: 16.3))
+        let midIron = solver.solve(launch: launch, spin: SpinEstimator.estimate(club: .midIron, launchAngleDeg: 16.3))
+        XCTAssertEqual(midIron.carryYards, 172, accuracy: 6, "tour 7-iron average")
+        XCTAssertGreaterThan(auto.carryYards, midIron.carryYards + 8, "formula spin flies irons long")
+        XCTAssertEqual(SpinEstimator.estimate(club: .wedge, launchAngleDeg: 25).rpm, SpinEstimator.maximumRPM)
+        XCTAssertEqual(SpinEstimator.estimate(club: .auto, launchAngleDeg: 10).rpm, 3_600, accuracy: 1e-9)
+    }
 }
