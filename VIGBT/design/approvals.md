@@ -1,7 +1,23 @@
 # Screen approvals
 
-One row per decision, newest first. Updated from the review page's `reviews` collection.
+One row per decision, newest first. Updated from the review page's `reviews` collection
+(https://claude.ai/artifact/Rr6a9yfCtbh5gDYpj3a7qN).
 
-| Version | Screen | Decision | Notes |
-|---|---|---|---|
-| — | — | — | No decisions yet. Review at https://claude.ai/artifact/Rr6a9yfCtbh5gDYpj3a7qN |
+| Release | Screen | Decision | Reviewed design | Decided | Notes |
+|---|---|---|---|---|---|
+| 0.10.1 | Welcome and safety notice (`onboarding`) | Approved | 0.10.0 | 2026-11-16 | No changes requested |
+| 0.10.1 | Set up at the tee (`setup`) | Approved | 0.10.0 | 2026-11-16 | No changes requested |
+| 0.10.1 | Ready (listening for the strike) (`ready`) | Approved | 0.10.0 | 2026-11-16 | No changes requested |
+| 0.10.1 | Measuring the shot (`processing`) | Approved | 0.10.0 | 2026-11-16 | No changes requested |
+| 0.10.1 | Your shot (replay and readout) (`replay`) | Approved | 0.10.0 | 2026-11-16 | No changes requested |
+| 0.10.1 | Walking to your ball (`walk`) | Approved | 0.10.0 | 2026-11-16 | No changes requested |
+| 0.10.1 | Finding your ball (ball highlight) (`homing`) | Approved | 0.10.0 | 2026-11-16 | No changes requested |
+| 0.10.1 | Ball found (`found`) | Approved | 0.10.0 | 2026-11-16 | No changes requested |
+| 0.10.1 | Course layout (with Return) (`layout`) | Approved | 0.10.0 | 2026-11-16 | No changes requested |
+| 0.10.1 | Choose course (`courses`) | Approved | 0.10.0 | 2026-11-16 | No changes requested |
+| 0.10.1 | Round setup (`round`) | Approved | 0.10.0 | 2026-11-16 | No changes requested |
+| 0.10.1 | Wind (`wind`) | Approved | 0.10.0 | 2026-11-16 | No changes requested |
+| 0.10.1 | My bag (`bag`) | Approved | 0.10.0 | 2026-11-16 | No changes requested |
+| 0.10.1 | Settings (display) (`settings`) | Approved | 0.10.0 | 2026-11-16 | No changes requested |
+| 0.10.1 | VIGBT Pro (`paywall`) | Approved | 0.10.0 | 2026-11-16 | No changes requested |
+| 0.10.1 | Shot history (`history`) | Approved | 0.10.0 | 2026-11-16 | No changes requested |

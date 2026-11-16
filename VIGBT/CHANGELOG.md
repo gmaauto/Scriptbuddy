@@ -6,6 +6,11 @@ All notable changes to VIGBT are recorded here. The format follows
 
 Versions before 1.0.0 are development builds that have not yet been compiled or tested on a device.
 
+## [0.10.1] - 2026-11-16
+
+### Approved
+- All 16 iOS screens approved in design review, with no changes requested: Welcome and safety, Set up at the tee, Ready, Measuring, Your shot, Walking to your ball, Finding your ball, Ball found, Course layout, Choose course, Round setup, Wind, My bag, Settings, VIGBT Pro, Shot history. Logged in `design/approvals.md`.
+
 ## [0.10.0] - 2026-11-16
 
 ### Added

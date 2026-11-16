@@ -1,9 +1,10 @@
 # Vision Impaired Golf Ball Tracker (VIGBT) — Master Technical & Commercial Specification
 
-Document version: 0.10.0 · Updated 2026-11-15 · Status: draft (not yet compiled or tested on a device)
+Document version: 0.10.1 · Updated 2026-11-15 · Status: draft (not yet compiled or tested on a device)
 
 | Version | Date | Changes |
 |---|---|---|
+| 0.10.1 | 2026-11-16 | All 16 screens approved in design review (`design/approvals.md`); no spec changes |
 | 0.10.0 | 2026-11-16 | §12.6 learning ground firmness; screen review workflow (§10, `design/`) |
 | 0.9.0 | 2026-11-15 | §12.5 wind input and compass correction; tighter search ellipse |
 | 0.8.0 | 2026-11-15 | §12 Monte Carlo validation (1M shots); reprojection fit with spin-axis estimation; bounce and roll; search ellipse |
