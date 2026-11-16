@@ -1,9 +1,10 @@
 # Vision Impaired Golf Ball Tracker (VIGBT) — Master Technical & Commercial Specification
 
-Document version: 0.12.0 · Updated 2026-11-15 · Status: draft (not yet compiled or tested on a device)
+Document version: 0.12.1 · Updated 2026-11-15 · Status: draft (not yet compiled or tested on a device)
 
 | Version | Date | Changes |
 |---|---|---|
+| 0.12.1 | 2026-11-16 | §12.9 search-pattern alternatives tested; none beat axis-then-lanes (no code change) |
 | 0.12.0 | 2026-11-16 | §12.8 course-map surfaces (fairway, rough, green, bunker, water) for roll and readout |
 | 0.11.0 | 2026-11-16 | §12.7 guided search pattern; walking guidance now ends at the near end of the search zone |
 | 0.10.1 | 2026-11-16 | All 16 screens approved in design review (`design/approvals.md`); no spec changes |
@@ -785,6 +786,29 @@ reports in `docs/validation/`):
 | Along-line p90 | 29.0 yd | **26.0 yd** |
 | Search coverage | 87.9% | **89.4%** |
 | Pure strikes, median | — | driver 13.7, 7-iron 8.8, wedge 5.8 yd |
+
+### 12.9 Search-pattern alternatives (0.12.1, no code change)
+
+**Question.** About 9.5% of pink balls are still not found within 250 m of searching. Would widening the
+search, or a pattern shaped like the ellipse, help?
+
+**Result.** No. With 100,000 shots in the shipped configuration (map surfaces on), the report is
+`docs/validation/search-alternatives-100k.txt`:
+
+| Strategy | Found within 250 m | Median walk |
+|---|---|---|
+| Centre, then spiral (before 0.11) | 89.1% | 42 m |
+| **Axis, then lanes (shipped)** | **90.5%** | **31 m** |
+| Axis, then lanes, then widen to 2.5× width and 1.5× length | 90.5% | 31 m |
+| Axis, then lanes clipped to the ellipse's chord | 90.3% | 31 m |
+| Axis, then isotropic spiral | 88.6% | 31 m |
+| Axis, then ellipse-shaped spiral | 88.2% | 31 m |
+
+**Why.** 76% of the missed balls lie inside the area the shipped pattern already covers (median 29 m from
+the predicted rest). They are missed because long driver searches run out of walking budget, not because
+the pattern stops too soon: with a 500 m budget the same pattern finds 94.6%. The remaining levers are
+therefore a longer detection range (a pink ball, §4.5; a trained detector) and a smaller zone (better
+prediction), not a different path. The shipped pattern is unchanged.
 
 These are model results: the physics, camera and noise figures are assumptions until they are checked
 against real recorded shots. Treat real-world capture as the next validation step.

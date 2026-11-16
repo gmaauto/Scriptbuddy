@@ -6,6 +6,11 @@ All notable changes to VIGBT are recorded here. The format follows
 
 Versions before 1.0.0 are development builds that have not yet been compiled or tested on a device.
 
+## [0.12.1] - 2026-11-16
+
+### Documented
+- Search-pattern alternatives (SPEC §12.9): widening, lanes clipped to the ellipse, and an ellipse-shaped spiral did not beat the shipped axis-then-lanes pattern. Missed balls mostly run out of walking budget rather than lying outside the pattern. The study is in `tools/search_sim.py` and the report in `docs/validation/search-alternatives-100k.txt`. No code change.
+
 ## [0.12.0] - 2026-11-16
 
 ### Added

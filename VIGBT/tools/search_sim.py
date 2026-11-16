@@ -36,7 +36,7 @@ def load_errors(args):
         min_radius_px=1.0, dropout=0.05, centroid_sigma=0.35, radius_sigma=0.2, heading_sigma=3.0, anchor=1,
         placement_yaw=0.0, ideal=0, fit_spin=1, rpm_prior=700, oracle_spin=0, oracle_tilt=0, oracle_wind=0,
         oracle_ground=0, wind_input=1, heading_mode="session", session_size=8, session_shrinkage=1.0,
-        ground_model="round", round_size=30, ground_learning=1, roll_prior=2.0, along=0.22, lateral=0.14,
+        ground_model="round", round_size=30, ground_learning=1, roll_prior=2.0, surface_model="fairway", map_surface=1, along=0.22, lateral=0.14,
         tight_along=0.20, tight_lateral=0.10, tight_low_lateral=0.08, low_launch_deg=8.0, low_along=0.45,
         low_lateral=0.12)
     with contextlib.redirect_stdout(io.StringIO()):
@@ -98,6 +98,44 @@ def path_for(strategy, A, L, w, budget):
                 k += 1
             side = -side
         return pts, None
+    if strategy == "axis-lanes-widen":
+        # As axis-lanes, then widen: lanes continue outward past 1.25 × the half-width (up to 2.5 ×),
+        # each running 1.5 × the ellipse half-length (SearchGuide's second pass, SPEC §12.9).
+        pts, _ = path_for("axis-lanes", A, L, w, budget)
+        covered = max(abs(p[1]) for p in pts)
+        E2 = 1.5 * A
+        pts.append((pts[-1][0], pts[-1][1]))
+        k = int(covered // (2 * w)) + 1
+        side, x_end = 1, (E2 if pts[-1][0] < 0 else -E2)
+        while k * 2 * w <= 2.5 * L and len(pts) < 400:
+            y = side * k * 2 * w
+            pts += [(-x_end, y), (x_end, y)]
+            if side < 0:
+                k += 1
+            side = -side
+        return pts, None
+    if strategy == "axis-lanes-ellipse":
+        # As axis-lanes, but each lane runs only the ellipse's chord at its offset (scaled to 1.3 L), so the
+        # walk skips the low-probability corners of the bounding rectangle (SPEC §12.9).
+        pts = [(approach, 0), (-A, 0), (A, 0)]
+        k, side = 1, 1
+        x_sign = 1
+        while k * 2 * w <= 1.6 * L and len(pts) < 200:
+            y = side * k * 2 * w
+            half = A * math.sqrt(max(0.12, 1 - (y / (1.3 * L)) ** 2))
+            pts += [(x_sign * half, y), (-x_sign * half, y)]
+            x_sign = -x_sign
+            if side < 0:
+                k += 1
+            side = -side
+        return pts, None
+    if strategy == "ellipse-spiral":
+        # Axis walk, then a spiral stretched to the ellipse's shape (y spacing 2w).
+        pts = [(approach, 0), (-A, 0), (A, 0), (0, 0)]
+        ratio = A / max(L, 1e-6)
+        for x, y in spiral((0, 0), 2 * w, 2 * w, budget / 2):
+            pts.append((x * ratio, y))
+        return pts, None
     if strategy == "axis-spiral":
         pts = [(approach, 0), (-A, 0), (A, 0), (0, 0)] + spiral((0, 0), 2 * w, 2 * w, budget / 3)
         return pts, None
@@ -147,7 +185,7 @@ def main():
           f"budget {args.budget:.0f} m of searching")
     print(f"{'strategy':<15}{'found':>8}{'median walk':>13}{'p80':>8}{'p90':>8}{'mean':>8}   (metres after reaching the zone)")
     res = {}
-    for s in ("centre-spiral", "axis-lanes", "axis-spiral"):
+    for s in ("centre-spiral", "axis-lanes", "axis-spiral", "axis-lanes-widen", "axis-lanes-ellipse", "ellipse-spiral"):
         wlk = search(along, lateral, A, L, s, args.detect, args.budget)
         f = np.isfinite(wlk)
         res[s] = wlk

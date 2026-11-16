@@ -1,0 +1,9 @@
+VIGBT search-pattern study: 99,999 tracked shots, detection range 6.0 m, budget 250 m of searching
+strategy          found  median walk     p80     p90    mean   (metres after reaching the zone)
+centre-spiral     89.1%          42     132    >250      55
+axis-lanes        90.5%          31     141     240      54
+axis-spiral       88.6%          31     152    >250      54
+axis-lanes-widen   90.5%          31     141     240      54
+axis-lanes-ellipse   90.3%          31     137     242      53
+ellipse-spiral    88.2%          31     171    >250      56
+Axis-lanes walks less than centre-spiral on 67% of shots found by both; short balls (found before the centre): 46% of all shots
