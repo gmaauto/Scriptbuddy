@@ -101,3 +101,40 @@ final class NavigationTests: XCTestCase {
         XCTAssertEqual(kf.east, 30, accuracy: 0.1)
     }
 }
+
+/// Guided search inside the search ellipse (SPEC §12.7).
+final class SearchPatternTests: XCTestCase {
+    func testLegsWalkTheAxisThenAlternateLanes() {
+        let legs = SearchPattern.legs(halfLength: 30, halfWidth: 12, sweepHalfWidth: 4.2)
+        XCTAssertEqual(legs[0].along, -30)
+        XCTAssertEqual(legs[0].right, 0)
+        XCTAssertEqual(legs[1].along, 30, "first the whole long axis")
+        XCTAssertEqual(legs[1].right, 0)
+        // Then lanes 8.4 m apart, alternating right and left, out to 1.25 × the half-width.
+        XCTAssertEqual(legs[2].right, 8.4, accuracy: 1e-9)
+        XCTAssertEqual(legs[3].right, 8.4, accuracy: 1e-9)
+        XCTAssertEqual(legs[3].along, -30)
+        XCTAssertEqual(legs[4].right, -8.4, accuracy: 1e-9)
+        XCTAssertTrue(legs.allSatisfy { abs($0.right) <= 1.25 * 12 + 1e-9 })
+        XCTAssertTrue(legs[2].instruction.hasPrefix("Turn right"))
+    }
+
+    func testGuideAdvancesAndSpeaks() throws {
+        let tee = GeoCoordinate(latitude: 50, longitude: 1)
+        let rest = GeoMath.destination(from: tee, distanceMeters: 150, bearingDeg: 0)
+        let landing = LandingEstimate(carryMeters: 140, lateralMeters: 0, searchRadiusMeters: 20,
+                                      target: TargetCoordinate(coordinate: rest, bearingFromTeeDeg: 0, distanceFromTeeMeters: 150, searchRadiusMeters: 20),
+                                      searchAlongMeters: 30, searchLateralMeters: 14)
+        var g = SearchGuide(landing: landing, tee: tee, detectionRangeMeters: 6)
+        XCTAssertEqual(GeoMath.distance(from: tee, to: g.entryPoint), 120, accuracy: 0.1, "near end of the zone")
+        XCTAssertNil(g.update(position: GeoMath.destination(from: tee, distanceMeters: 100, bearingDeg: 0)))
+        let s1 = try XCTUnwrap(g.update(position: g.entryPoint))
+        XCTAssertTrue(s1.contains("straight ahead"))
+        XCTAssertEqual(g.index, 1)
+        let farEnd = try XCTUnwrap(g.currentWaypoint)
+        XCTAssertEqual(GeoMath.distance(from: tee, to: farEnd), 180, accuracy: 0.1)
+        XCTAssertNotNil(g.update(position: farEnd))
+        XCTAssertEqual(g.index, 2)
+        XCTAssertFalse(g.isFinished)
+    }
+}

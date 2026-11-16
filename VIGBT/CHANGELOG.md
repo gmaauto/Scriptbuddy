@@ -6,6 +6,18 @@ All notable changes to VIGBT are recorded here. The format follows
 
 Versions before 1.0.0 are development builds that have not yet been compiled or tested on a device.
 
+## [0.11.0] - 2026-11-16
+
+### Added
+- Guided search pattern (SPEC §12.7):
+  - `SearchPattern` and `SearchGuide` lead the golfer down the long axis of the search ellipse, then along lanes, with a spoken instruction at each turn.
+  - The beacon leads along the path while the camera scans, and pauses when the ball comes into view.
+  - In a 100,000-shot study with a pink ball, the median walk in the zone drops from 43 m to 30 m and 89.8% of balls are found within 250 m, up from 87.9%.
+- `tools/search_sim.py` (search strategy study) and `docs/validation/search-pattern-100k.txt`.
+
+### Changed
+- Walking guidance now ends at the near end of the search zone (5 m arrival radius) instead of its centre. The ground scanner starts there.
+
 ## [0.10.1] - 2026-11-16
 
 ### Approved

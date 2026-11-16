@@ -121,7 +121,7 @@ textarea { width: 100%; min-height: 84px; font: inherit; color: var(--fg); backg
 
 <div class="wrap">
   <header class="intro">
-    <span class="eyebrow">VIGBT 0.10.1 · iOS app · design review</span>
+    <span class="eyebrow">VIGBT 0.11.0 · iOS app · design review</span>
     <h1>Approve each screen</h1>
     <p>These mock-ups follow the SwiftUI code and use the app's own tested colour palettes. Switch the app theme and text size to check them the way low-vision golfers will see them. Approve a screen or request changes with a comment. Your decisions are saved here, and Claude reads them to make the changes.</p>
     <p class="example">Distances, course names and shot numbers on these screens are examples.</p>
@@ -160,7 +160,7 @@ textarea { width: 100%; min-height: 84px; font: inherit; color: var(--fg); backg
 </div>
 
 <script>
-const VERSION = "0.10.1";
+const VERSION = "0.11.0";
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
 // ---------- shared mock pieces ----------
@@ -250,19 +250,21 @@ const SCREENS = [
       <div class="a-t3 a-center" style="font-weight:700">Ball speed 112 miles per hour. Launch angle 17 degrees. Direction 2 degrees right. Estimated carry 158 yards. It should stop about 163 yards out, 6 yards right.</div>
       <div class="card" style="display:grid;gap:6px">${kv("Ball speed", "112 mph")}${kv("Launch angle", "17°")}${kv("Direction", "2° right")}${kv("Carry", "158 yd")}${kv("Offline", "6 yd right")}${kv("Expected stop", "163 yd")}${kv("Search zone", "± 32 yd long, ± 16 yd wide")}</div>
       ${btn("Walk to ball")}${btn("Next shot (same tee)", false)}${btn("New tee", false)}${cbtn("Shot history")}</div>` },
-  { id: "walk", name: "Walking to your ball", file: "WalkView",
+  { id: "walk", name: "Walking to your ball", file: "WalkView", changedIn: "0.11.0",
+    change: "Guidance now leads to the near end of the search zone, where scanning starts, instead of its centre.",
     why: "Huge distance, direction arrow and spoken guidance while the beacon plays.",
-    checks: ["Is the number big enough?", "Is \"Turn left 20 degrees\" the right wording?"],
+    checks: ["Is \"to the search zone\" clear?", "Is \"Turn left 20 degrees\" the right wording?"],
     body: () => `${holeHeader("163 yd to ball")}<div class="scroll">${title("Walking to your ball")}
-      <div class="big-num">112</div><div class="a-title" style="font-weight:400">yards</div>
+      <div class="big-num">94</div><div class="a-title" style="font-weight:400">yards to the search zone</div>
       <svg viewBox="0 0 100 100" width="40%" style="align-self:center;transform:rotate(-20deg)" aria-hidden="true"><path d="M50 8 L82 48 H62 V92 H38 V48 H18 Z" style="fill:var(--a-warn)" stroke="var(--a-text)" stroke-width="3"/></svg>
       <div class="a-title" style="font-size:calc(24px*var(--u)*var(--ts))">Turn left 20 degrees</div>
       ${btn("Repeat distance")}${btn("Scan ground now", false)}${btn("End", false)}</div>` },
-  { id: "homing", name: "Finding your ball (ball highlight)", file: "HomingView",
-    why: "Close-range scan: ticks speed up as the ball is centred; ball highlight for low vision.",
-    checks: ["Is the ring around the ball visible enough?", "Are zoom buttons useful?"],
+  { id: "homing", name: "Finding your ball (guided search)", file: "HomingView", changedIn: "0.11.0",
+    change: "Scanning starts at the near end of the zone; the beacon leads down the long axis and then along lanes, with spoken turns. It pauses when the ball is in view.",
+    why: "Close-range scan along a guided search path; ticks speed up as the ball is centred; ball highlight for low vision.",
+    checks: ["Is the search-leg progress useful on screen, or only spoken?", "Is the ring around the ball visible enough?"],
     body: () => `<div class="scroll">${title("Finding your ball")}${highlight()}
-      <div class="a-t2 a-center">Ball in view, about 3 metres</div><div class="a-center">Faster ticks mean the ball is closer to the centre.</div>
+      <div class="a-t2 a-center">Searching. Search leg 2 of 7.</div><div class="a-head a-center a-acc">Next: turn right and walk 8 metres.</div><div class="a-center">Faster ticks mean the ball is closer to the centre.</div>
       ${astack(cbtn("Zoom out"), `<div class="a-head a-center" style="align-self:center;min-width:70px">Zoom 2×</div>`, cbtn("Zoom in"))}
       ${btn("I found it")}${btn("Back to walking guidance", false)}</div>` },
   { id: "found", name: "Ball found", file: "FoundView",
@@ -335,7 +337,19 @@ const SCREENS = [
 const state = { theme: "dark", ts: 1, filter: "all", reviews: {}, db: null, offline: false };
 const queues = {};
 
-function statusOf(id) { return state.reviews[id]?.status || "pending"; }
+function newer(a, b) { // true if version a > b
+  const pa = String(a).split(".").map(Number), pb = String(b || "0").split(".").map(Number);
+  for (let i = 0; i < 3; i++) { if ((pa[i] || 0) !== (pb[i] || 0)) return (pa[i] || 0) > (pb[i] || 0); }
+  return false;
+}
+function needsReReview(id) {
+  const s = SCREENS.find(x => x.id === id), r = state.reviews[id];
+  return !!(s?.changedIn && r?.status && r.status !== "pending" && newer(s.changedIn, r.version));
+}
+function statusOf(id) { return needsReReview(id) ? "pending" : (state.reviews[id]?.status || "pending"); }
+function changeNote(s) {
+  return s.changedIn ? `<p class="meta"><span class="statusword changes">Changed in ${esc(s.changedIn)}:</span> ${esc(s.change)}${needsReReview(s.id) ? " Please review again." : ""}</p>` : "";
+}
 
 function renderPhone(s) {
   const ax = state.ts >= 1.6 ? " ax" : "";
@@ -347,7 +361,7 @@ function renderPanel(s, i) {
   const st = statusOf(s.id);
   const when = r.updatedAt ? new Date(r.updatedAt).toLocaleString([], { dateStyle: "medium", timeStyle: "short" }) : "";
   return `<span class="num">Screen ${i + 1} of ${SCREENS.length} · ${esc(s.file)}</span>
-    <h2>${esc(s.name)}</h2><p>${esc(s.why)}</p>
+    <h2>${esc(s.name)}</h2><p>${esc(s.why)}</p><div id="cn-${s.id}">${changeNote(s)}</div>
     <ul class="checks">${s.checks.map(c => `<li>${esc(c)}</li>`).join("")}</ul>
     <div class="decide">
       <button type="button" class="ok" data-act="approved" aria-pressed="${st === "approved"}">Approve</button>
@@ -384,6 +398,8 @@ function refreshRow(id) {
   row.querySelectorAll(".decide button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.act === st)));
   const ta = row.querySelector("textarea");
   if (ta && document.activeElement !== ta) ta.value = state.reviews[id]?.comment || "";
+  const cn = document.getElementById("cn-" + id);
+  if (cn) cn.innerHTML = changeNote(s);
   const r = state.reviews[id] || {};
   const when = r.updatedAt ? new Date(r.updatedAt).toLocaleString([], { dateStyle: "medium", timeStyle: "short" }) : "";
   document.getElementById("m-" + id).innerHTML = st === "pending" ? "Not reviewed yet." :

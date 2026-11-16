@@ -72,6 +72,11 @@ final class AppModel {
     @ObservationIgnored private let beacon = AudioBeaconService()
     @ObservationIgnored private let haptics = HapticsService()
     @ObservationIgnored private var navigation: NavigationEngine?
+    /// Guided search inside the search ellipse (SPEC §12.7) and the beacon target for its current leg.
+    @ObservationIgnored private var searchGuide: SearchGuide?
+    @ObservationIgnored private var searchNav: NavigationEngine?
+    @ObservationIgnored private var searchLegIndex = -1
+    @ObservationIgnored private var ballInView = false
     @ObservationIgnored private var homing = HomingController()
     @ObservationIgnored private var analysisTask: Task<Void, Never>?
     @ObservationIgnored private var thermalObserver: NSObjectProtocol?
@@ -375,20 +380,32 @@ final class AppModel {
             showPaywall = true
             return
         }
-        guard let shot = currentShot, let target = shot.landing?.target else { return }
+        guard let shot = currentShot, let landing = shot.landing else { return }
         let cal = shot.calibration
         AudioSessionMode.guidance.apply()
-        var engine = NavigationEngine(target: target)
+        // Walk to the NEAR end of the search zone, where scanning starts (SPEC §12.7), not to its centre.
+        let guide = SearchGuide(landing: landing, tee: cal.teeLocation, detectionRangeMeters: detectionRange)
+        searchGuide = guide
+        searchLegIndex = -1
+        let entry = guide.entryPoint
+        let entryTarget = TargetCoordinate(coordinate: entry, bearingFromTeeDeg: GeoMath.bearing(from: cal.teeLocation, to: entry),
+                                           distanceFromTeeMeters: GeoMath.distance(from: cal.teeLocation, to: entry),
+                                           searchRadiusMeters: landing.searchRadiusMeters)
+        var engine = NavigationEngine(target: entryTarget, arrivalRadiusMeters: 5)
         engine.begin(from: cal.teeLocation)
         navigation = engine
         location.beginWalk(from: cal.teeLocation)
         beacon.start()
         phase = .navigating
-        let yards = Units.yards(fromMeters: target.distanceFromTeeMeters)
-        speak("Walking to your ball. \(Readout.distance(yards: yards)). Follow the beacon.")
+        let yards = Units.yards(fromMeters: entryTarget.distanceFromTeeMeters)
+        speak("Walking to the search zone. \(Readout.distance(yards: yards)). Follow the beacon.")
     }
 
+    /// Ground-scanner detection range: a coloured ball stands out further away than a white one (§12.7).
+    private var detectionRange: Double { profile.preset == .white ? 4 : 6 }
+
     private func navigationTick() {
+        if phase == .homing { return searchTick() }
         guard phase == .navigating, var nav = navigation, let position = location.smoothedPosition else { return }
         // Compass first; then GPS course while walking; with neither (e.g. the Simulator) assume on line.
         let course = location.lastFix.flatMap { $0.course >= 0 && $0.speed > 0.3 ? $0.course : nil }
@@ -419,15 +436,46 @@ final class AppModel {
             showPaywall = true
             return
         }
-        stopGuidance()
-        location.endWalk()
+        navigation = nil
+        guidance = nil
         homing.reset()
+        ballInView = false
         homingStatus = "Searching"
         highlightImage = nil
         scanner.highlightPalette = effectivePalette
         scanner.start(profile: profile)
         phase = .homing
-        speak("Arrived at search zone. Point the phone at the ground and sweep slowly from side to side.", interrupt: true)
+        if searchGuide == nil {
+            beacon.stop()
+            location.endWalk()
+        }
+        speak("Search zone. Point the phone at the ground ahead and sweep slowly from side to side as you walk. "
+              + "Follow the beacon along the search path.", interrupt: true)
+        searchTick()
+    }
+
+    /// Search mode: the camera scans while the beacon leads along the search pattern's legs.
+    private func searchTick() {
+        guard phase == .homing, var guide = searchGuide, let position = currentPosition else { return }
+        if let instruction = guide.update(position: position) { speak(instruction, interrupt: true) }
+        searchGuide = guide
+        homingStatus = ballInView ? homingStatus : "Searching. \(guide.progressText)"
+        guard let wp = guide.currentWaypoint else {
+            beacon.stop()
+            return
+        }
+        if guide.index != searchLegIndex {
+            searchLegIndex = guide.index
+            let t = TargetCoordinate(coordinate: wp, bearingFromTeeDeg: GeoMath.bearing(from: position, to: wp),
+                                     distanceFromTeeMeters: GeoMath.distance(from: position, to: wp), searchRadiusMeters: 4)
+            var nav = NavigationEngine(target: t, arrivalRadiusMeters: guide.reachRadiusMeters)
+            nav.begin(from: position)
+            searchNav = nav
+        }
+        guard !ballInView, var nav = searchNav else { return }
+        let heading = location.heading ?? GeoMath.bearing(from: position, to: wp)
+        beacon.update(nav.update(position: position, headingDeg: heading))
+        searchNav = nav
     }
 
     private func groundDetection(_ d: GroundDetection?) {
@@ -436,11 +484,16 @@ final class AppModel {
             haptics.handle(event)
             switch event {
             case .peripheralDetected:
+                // Haptics take over: pause the search beacon so the ticks are easy to follow.
+                ballInView = true
+                beacon.stop()
                 homingStatus = "Ball in view"
                 speak("Ball in view.")
             case .lost:
+                ballInView = false
                 homingStatus = "Searching"
                 speak("Lost it. Keep sweeping.")
+                if searchGuide?.isFinished == false { beacon.start() }
             case .locked:
                 ballFound()
             case .tick:
@@ -471,6 +524,8 @@ final class AppModel {
         }
         scanner.stop()
         haptics.stopTicking()
+        stopGuidance()
+        location.endWalk()
         beacon.playSuccessChime()
         phase = .found
         speak("Ball found. It is straight ahead of the camera, within two metres.", interrupt: true)
@@ -503,6 +558,10 @@ final class AppModel {
         beacon.stop()
         navigation = nil
         guidance = nil
+        searchGuide = nil
+        searchNav = nil
+        searchLegIndex = -1
+        ballInView = false
     }
 
     private func wireCallbacks() {

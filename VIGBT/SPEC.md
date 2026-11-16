@@ -1,9 +1,10 @@
 # Vision Impaired Golf Ball Tracker (VIGBT) — Master Technical & Commercial Specification
 
-Document version: 0.10.1 · Updated 2026-11-15 · Status: draft (not yet compiled or tested on a device)
+Document version: 0.11.0 · Updated 2026-11-15 · Status: draft (not yet compiled or tested on a device)
 
 | Version | Date | Changes |
 |---|---|---|
+| 0.11.0 | 2026-11-16 | §12.7 guided search pattern; walking guidance now ends at the near end of the search zone |
 | 0.10.1 | 2026-11-16 | All 16 screens approved in design review (`design/approvals.md`); no spec changes |
 | 0.10.0 | 2026-11-16 | §12.6 learning ground firmness; screen review workflow (§10, `design/`) |
 | 0.9.0 | 2026-11-15 | §12.5 wind input and compass correction; tighter search ellipse |
@@ -644,7 +645,7 @@ and the compass are.
    distance.
 3. **Done in 0.9.0 (§12.5), plus self-correction from found balls.** **Correct the compass** by sighting the target line at setup (point the phone at the green or pin):
    ±3° is about 10 yd at 200 yd.
-4. **Guided search pattern** inside the ellipse: walk the long axis first, because along-line errors are
+4. **Done in 0.11.0 (§12.7).** **Guided search pattern** inside the ellipse: walk the long axis first, because along-line errors are
    about twice the lateral ones.
 
 ### 12.5 Wind input and compass correction (0.9.0)
@@ -714,6 +715,40 @@ Results, 1,000,000 shots each, with wind entered and the self-correcting compass
 
 Low launches (thin and topped shots) remain the weakest group at about 82% coverage, because their roll
 varies most between fairway and rough.
+
+### 12.7 Guided search pattern (0.11.0)
+
+**Problem.** Walking guidance used to lead to the centre of the search zone, with the ground scanner
+switched on only within 10 yd of it. Since 48% of balls stop *short* of the predicted point and the golfer
+approaches from the tee, many were walked past unseen.
+
+**Change.**
+- **Where walking ends:** walking guidance now ends at the zone's near end (5 m arrival radius), where
+  scanning starts.
+- **The search path:** `SearchPattern` / `SearchGuide` lead the golfer down the long axis to the far end,
+  then along lanes 2 × 0.7 × the detection range apart, alternating right and left, out to 1.25× the zone
+  half-width.
+- **Guidance on the path:** the spatial-audio beacon points to each waypoint and each turn is spoken.
+- **When the ball comes into view:** the beacon pauses so the haptic ticks lead. It resumes if the ball is
+  lost.
+- **Detection range used:** 6 m for a coloured ball and 4 m for a white one.
+
+**Study** (`tools/search_sim.py`: real prediction errors from the shipped pipeline, 100,000 shots, golfer
+always approaching from the tee; report in `docs/validation/search-pattern-100k.txt`):
+
+| Ball (detection range) | Strategy | Found within 250 m of searching | Median walk in the zone |
+|---|---|---|---|
+| Pink (6 m) | Centre, then spiral (before 0.11.0) | 87.9% | 43 m |
+| Pink (6 m) | **Axis, then lanes** | **89.8%** | **30 m** |
+| White (4 m) | Centre, then spiral | 82.8% | 56 m |
+| White (4 m) | **Axis, then lanes** | 82.6% | **50 m** |
+
+- **Less walking:** axis-then-lanes needs less walking on 70% of shots with a pink ball and 61% with a
+  white one.
+- **Variations that lost:** extending the axis walk 1.3× or 1.6× past the zone ends made results worse
+  (more walking for few extra finds). Axis-then-spiral also did worse.
+- **White balls:** finding rates are no better, because detection range is the limit there, which is one
+  more reason to recommend a pink ball (§4.5).
 
 These are model results: the physics, camera and noise figures are assumptions until they are checked
 against real recorded shots. Treat real-world capture as the next validation step.
