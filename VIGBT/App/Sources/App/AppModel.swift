@@ -403,7 +403,7 @@ final class AppModel {
     }
 
     /// Ground-scanner detection range: a coloured ball stands out further away than a white one (§12.7).
-    private var detectionRange: Double { profile.preset == .white ? 4 : 6 }
+    private var detectionRange: Double { DetectionRange.meters(preset: profile.preset, model: scanner.detectorInfo) }
 
     private func navigationTick() {
         if phase == .homing { return searchTick() }

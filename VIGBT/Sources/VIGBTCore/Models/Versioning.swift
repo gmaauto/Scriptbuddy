@@ -4,9 +4,9 @@ import Foundation
 /// the top entry of `CHANGELOG.md` and the `SPEC.md` document version. `VersioningTests` and
 /// `tools/check_version.sh` enforce this. Versioning follows Semantic Versioning 2.0.0.
 public enum VIGBTVersion {
-    public static let string = "0.12.1"
+    public static let string = "0.13.0"
     /// Monotonic build number (`CURRENT_PROJECT_VERSION`); +1 on every release.
-    public static let build = 14
+    public static let build = 15
 }
 
 /// Format versions of every file VIGBT writes. Bump a number whenever that file's JSON shape changes

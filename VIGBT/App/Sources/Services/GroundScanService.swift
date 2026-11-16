@@ -30,6 +30,10 @@ final class GroundScanService: NSObject, AVCaptureVideoDataOutputSampleBufferDel
     private let lock = NSLock()
     private var profile: BallColorProfile?
     private let whiteDetector = WhiteBallDetector()
+    /// Trained detector, when one is bundled (SPEC §12.10); nil otherwise.
+    private let modelDetector = CoreMLBallDetector()
+    private let fusion = DetectionFusion()
+    var detectorInfo: BallDetectorInfo? { modelDetector?.info }
     private let scorer = FusionScorer()
     /// Processing step: 2 → 960×540 masks, plenty for a ball within ~10 m.
     private let step = 2
@@ -106,27 +110,34 @@ final class GroundScanService: NSObject, AVCaptureVideoDataOutputSampleBufferDel
         let bpr = CVPixelBufferGetBytesPerRow(pixels)
         var masks: FrameMasks?
         var best: DetectionCandidate?
+        var candidates: [DetectionCandidate] = []
         if let base = CVPixelBufferGetBaseAddress(pixels) {
             let bytes = UnsafeRawBufferPointer(start: base, count: bpr * h)
             if profile.preset == .white {
                 // White balls: colour alone matches sky, sand and lines, so use the dedicated detector.
                 let r = whiteDetector.detect(bgra: bytes, width: w, height: h, bytesPerRow: bpr, step: step)
                 masks = r.masks
+                candidates = r.candidates
                 best = r.candidates.first
             } else {
                 let m = FrameMasks.build(bgra: bytes, width: w, height: h, bytesPerRow: bpr, step: step, range: profile.range)
                 masks = m
-                best = BlobDetector(minArea: 3, maxArea: m.width * m.height / 8)
+                let round = BlobDetector(minArea: 3, maxArea: m.width * m.height / 8)
                     .detect(mask: m.color, width: m.width, height: m.height, color: m.color, step: step)
                     .compactMap { b -> (DetectionCandidate, Double)? in
                         guard let circ = scorer.circularity(of: b) else { return nil }
                         return (b, circ * b.radiusPixels)
                     }
-                    .max { $0.1 < $1.1 }?.0
+                candidates = round.map { $0.0 }
+                best = round.max { $0.1 < $1.1 }?.0
             }
         }
         CVPixelBufferUnlockBaseAddress(pixels, .readOnly)
         guard let masks else { return }
+        // A trained detector, when bundled, runs on every other frame and is fused with the hand-built one.
+        if let model = modelDetector, frameCounter % 2 == 0 {
+            best = fusion.fuse(heuristic: candidates, model: model.detect(pixels))
+        }
 
         var detection: GroundDetection?
         if let b = best {

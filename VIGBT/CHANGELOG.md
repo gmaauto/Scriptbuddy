@@ -6,6 +6,20 @@ All notable changes to VIGBT are recorded here. The format follows
 
 Versions before 1.0.0 are development builds that have not yet been compiled or tested on a device.
 
+## [0.13.0] - 2026-11-16
+
+### Added
+- Trained ball-detector pipeline (SPEC §12.10):
+  - `tools/train_ball_detector.py`: a tiny centre-heatmap network that refuses datasets without an open licence and exports to Core ML.
+  - `CoreMLBallDetector`: used only when a model trained on open data is bundled.
+  - `DetectionFusion` (combines the model with the hand-built detectors).
+  - `DetectionRange`: search lanes widen only for a field-validated range.
+  - The smoke test on synthetic images reached precision 0.97 and recall 0.76.
+- SPEC §9.4: review of ballistics-engine (MIT/Apache-2.0). Wind shear, station atmosphere, uncertainty-aware learning and an error-budget hint are taken as ideas; no code is copied.
+
+### Notes
+- Core ML export did not run in the Linux/Python 3.13 build environment. It is expected to work on macOS, which is untested.
+
 ## [0.12.1] - 2026-11-16
 
 ### Documented

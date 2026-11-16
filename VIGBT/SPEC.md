@@ -1,9 +1,10 @@
 # Vision Impaired Golf Ball Tracker (VIGBT) — Master Technical & Commercial Specification
 
-Document version: 0.12.1 · Updated 2026-11-15 · Status: draft (not yet compiled or tested on a device)
+Document version: 0.13.0 · Updated 2026-11-15 · Status: draft (not yet compiled or tested on a device)
 
 | Version | Date | Changes |
 |---|---|---|
+| 0.13.0 | 2026-11-16 | §12.10 trained-detector pipeline; §9.4 ballistics-engine research |
 | 0.12.1 | 2026-11-16 | §12.9 search-pattern alternatives tested; none beat axis-then-lanes (no code change) |
 | 0.12.0 | 2026-11-16 | §12.8 course-map surfaces (fairway, rough, green, bunker, water) for roll and readout |
 | 0.11.0 | 2026-11-16 | §12.7 guided search pattern; walking guidance now ends at the near end of the search zone |
@@ -493,6 +494,24 @@ when its licence is compatible with Apache-2.0. Otherwise only the idea is used.
 | Spoken shot feedback (Toptracer blind clinics, GolfBuddy Voice) | Launch, carry and search-zone readouts | Done |
 | Sound-triggered capture window (OpenFlight, as an idea) | `ImpactDetector` | Already in place |
 
+### 9.4 ballistics-engine (ballistics.rs), reviewed 0.13.0
+
+[ballistics-engine](https://github.com/ajokela/ballistics-engine) (crate 0.50.1, **MIT OR Apache-2.0**, so
+compatible with this project, with attribution if code is copied) is a large rifle-ballistics engine
+(about 146,000 lines of Rust). VIGBT copies no code from it. Ideas worth taking:
+
+| Idea | Module | Value for VIGBT |
+|---|---|---|
+| **Wind shear (log-law profile)** | `wind/field.rs` `LogProfile` | High. The golfer feels wind at about 1.7 m, but a drive peaks at 25–30 m where wind is about 1.7× stronger. A 10 mph headwind costs a further 5–6 yd of carry (driver 229 → 223 yd). Planned for 0.14.0. |
+| Station atmosphere (ICAO plus humidity) | `atmosphere.rs` | Medium. The iPhone barometer (`CMAltimeter`) gives station pressure, which gives air density. A course at altitude flies noticeably further. |
+| Uncertainty-aware truing (MAP fit with priors and Laplace intervals) | `truing_uncertainty.rs` | Medium. A principled version of our learners (compass, roll, search zone), which could also report *how sure* they are. |
+| Per-input error budget ("which single input is worth improving") | `error_budget.rs` | Medium. Our ablations (§12.3) as an in-app hint, e.g. "Entering the wind would help most now." |
+| Spin decay from roll-damping physics | `spin_decay.rs` | Low. Built for bullets; golf needs its own data. We keep τ = 25 s. |
+| Adaptive RK45 integration | `trajectory_integration.rs` | Low. Speed only; our fixed-step RK4 is fast enough. |
+
+Not relevant: Coriolis (about 1 cm at golf distances), reticles and optics, recoil, gyroscopic stability,
+bullet ballistic-coefficient tables, transonic drag.
+
 ### 9.3 Backlog (prioritised)
 
 1. **Low-vision ball highlight** (from colour-filter finder apps). **Done in 0.6.0:** `BallHighlight` and
@@ -809,6 +828,41 @@ the predicted rest). They are missed because long driver searches run out of wal
 the pattern stops too soon: with a 500 m budget the same pattern finds 94.6%. The remaining levers are
 therefore a longer detection range (a pink ball, §4.5; a trained detector) and a smaller zone (better
 prediction), not a different path. The shipped pattern is unchanged.
+
+### 12.10 Trained ball detector pipeline (0.13.0)
+
+**Why.** The search study (§12.9) showed detection range is the main remaining lever:
+
+| Detection range | Found within 250 m | Median walk |
+|---|---|---|
+| 4 m (white ball today) | 83.9% | 48 m |
+| 6 m (pink ball today) | 90.6% | 31 m |
+| 8 m | 93.6% | 25 m |
+| 10 m | 95.2% | 22 m |
+
+**What is built.**
+- **`tools/train_ball_detector.py`**, our own code:
+  - A tiny network, about 224,000 parameters, that outputs a heat map of ball centres plus each ball's
+    radius, at a quarter of the 288 × 512 input resolution.
+  - Tools: PyTorch (BSD) to train and coremltools (BSD) to export to Core ML.
+  - It **refuses any dataset whose `dataset.json` lacks an approved open licence** (§8).
+  - It also writes `VIGBTBallDetector.json` with the training-data licences.
+- **`CoreMLBallDetector`** (app): used only if the model and its JSON are bundled and the training data is
+  open. Otherwise the scanner works as before.
+- **`DetectionFusion`** (core): combines the trained detector with the hand-built checks:
+  - when both see the ball, their confidences combine;
+  - the trained detector alone counts from 0.6 confidence;
+  - the hand-built checks alone behave exactly as before.
+- **`DetectionRange`:** the search lanes widen only once a model's range has been **measured in a field
+  test** (`validatedRangeMeters`). An untested model can add finds but never widen the search.
+
+**Status.**
+- **Pipeline smoke test** on 2,000 *synthetic* images (6 epochs, CPU): precision 0.97, recall 0.76, still
+  improving (`docs/validation/detector-smoke-synthetic-metrics.json`). That shows the pipeline works; it
+  says nothing about real-world accuracy.
+- **Core ML export** did not run in the Linux/Python 3.13 build environment (coremltools' native writer
+  is missing there). It is expected to work on macOS, but that is unverified.
+- **Next:** train on licence-checked real images, then a field test that fills in `validatedRangeMeters`.
 
 These are model results: the physics, camera and noise figures are assumptions until they are checked
 against real recorded shots. Treat real-world capture as the next validation step.

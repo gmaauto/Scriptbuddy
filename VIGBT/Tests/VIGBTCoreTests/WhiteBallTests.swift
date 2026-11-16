@@ -77,3 +77,53 @@ final class WhiteBallTests: XCTestCase {
         XCTAssertEqual(BallColorProfile.white.preset, .white)
     }
 }
+
+/// Trained-detector fusion and detection range (SPEC §12.10).
+final class DetectionFusionTests: XCTestCase {
+    private func cand(_ x: Double, _ y: Double, conf: Double) -> DetectionCandidate {
+        DetectionCandidate(centerX: x, centerY: y, width: 12, height: 12, colorMatchFraction: conf)
+    }
+
+    func testAgreementBoostsConfidence() throws {
+        let f = DetectionFusion().fuse(heuristic: [cand(100, 100, conf: 0.5)],
+                                       model: [ModelDetection(centerX: 104, centerY: 98, radiusPixels: 6, confidence: 0.6)])
+        let c = try XCTUnwrap(f)
+        XCTAssertEqual(c.colorMatchFraction, 1 - 0.5 * 0.4, accuracy: 1e-9)
+        XCTAssertEqual(c.centerX, 100, "keeps the heuristic's sub-pixel centre")
+    }
+
+    func testModelAloneNeedsHighConfidence() {
+        let fusion = DetectionFusion()
+        XCTAssertNil(fusion.fuse(heuristic: [], model: [ModelDetection(centerX: 50, centerY: 50, radiusPixels: 3, confidence: 0.5)]))
+        XCTAssertEqual(fusion.fuse(heuristic: [], model: [ModelDetection(centerX: 50, centerY: 50, radiusPixels: 3, confidence: 0.7)])?.centerX, 50)
+    }
+
+    func testHeuristicAloneStillWorksWithoutAModel() {
+        XCTAssertEqual(DetectionFusion().fuse(heuristic: [cand(10, 10, conf: 0.9)], model: [])?.centerX, 10)
+        XCTAssertNil(DetectionFusion().fuse(heuristic: [cand(10, 10, conf: 0.1)], model: []))
+    }
+
+    func testBestOfSeveralWins() {
+        let best = DetectionFusion().fuse(heuristic: [cand(10, 10, conf: 0.4), cand(300, 300, conf: 0.5)],
+                                          model: [ModelDetection(centerX: 300, centerY: 301, radiusPixels: 6, confidence: 0.9),
+                                                  ModelDetection(centerX: 600, centerY: 600, radiusPixels: 6, confidence: 0.8)])
+        XCTAssertEqual(best?.centerX, 300)
+    }
+
+    func testRangeOnlyGrowsWithValidatedModel() {
+        XCTAssertEqual(DetectionRange.meters(preset: .white, model: nil), 4)
+        XCTAssertEqual(DetectionRange.meters(preset: .neonPink, model: nil), 6)
+        let unvalidated = BallDetectorInfo(name: "x", version: "1", trainingDataLicences: ["CC0-1.0"])
+        XCTAssertEqual(DetectionRange.meters(preset: .white, model: unvalidated), 4, "no field test, no wider lanes")
+        let validated = BallDetectorInfo(name: "x", version: "1", trainingDataLicences: ["CC0-1.0"],
+                                         validatedRangeMeters: ["white": 6.5, "colour": 5])
+        XCTAssertEqual(DetectionRange.meters(preset: .white, model: validated), 6.5)
+        XCTAssertEqual(DetectionRange.meters(preset: .neonPink, model: validated), 6, "never below the heuristic")
+    }
+
+    func testOpenDataCheck() {
+        XCTAssertTrue(BallDetectorInfo(name: "x", version: "1", trainingDataLicences: ["CC-BY-4.0", "MIT"]).isOpenData)
+        XCTAssertFalse(BallDetectorInfo(name: "x", version: "1", trainingDataLicences: ["CC-BY-4.0", "Proprietary"]).isOpenData)
+        XCTAssertFalse(BallDetectorInfo(name: "x", version: "1", trainingDataLicences: []).isOpenData)
+    }
+}
