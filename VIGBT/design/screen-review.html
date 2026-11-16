@@ -1,0 +1,475 @@
+<title>VIGBT Screen Review</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Space+Grotesk:wght@500;700&display=swap">
+<style>
+/* Layout: review wall — sticky control bar, then one row per screen: phone mock on the left, decision panel on the right (stacks on phones). */
+:root {
+  --bg: #EEF1EF; --surface: #FFFFFF; --fg: #121715; --muted: #47524C; --line: #C7D0CA;
+  --accent: #1D6A44; --approve: #1D6A44; --change: #9A3D00; --pending: #47524C;
+  --font-display: "Space Grotesk", "Inter", system-ui, sans-serif;
+  --font-body: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-app: -apple-system, "SF Pro Text", "Inter", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #0E1210; --surface: #171D1A; --fg: #E7ECE9; --muted: #A2ADA7; --line: #2C3530;
+  --accent: #6FD39A; --approve: #6FD39A; --change: #FFB27A; --pending: #A2ADA7; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #0E1210; --surface: #171D1A; --fg: #E7ECE9; --muted: #A2ADA7; --line: #2C3530;
+  --accent: #6FD39A; --approve: #6FD39A; --change: #FFB27A; --pending: #A2ADA7; color-scheme: dark }
+
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--fg); font-family: var(--font-body); font-size: 15px; line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 0 48px; }
+body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); }
+h1, h2 { font-family: var(--font-display); text-wrap: balance; margin: 0; }
+h1 { font-size: clamp(1.6rem, 4vw, 2.3rem); letter-spacing: -0.01em; }
+.wrap { max-width: 1120px; margin: 0 auto; }
+.intro { display: grid; gap: 10px; padding-block: 28px 18px; }
+.intro p { margin: 0; max-width: 68ch; color: var(--muted); }
+.eyebrow { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); font-weight: 600; }
+
+/* Control bar */
+.bar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg); border-bottom: 1px solid var(--line);
+  display: flex; flex-wrap: wrap; gap: 12px 20px; align-items: center; padding-block: 12px; }
+.tally { display: flex; gap: 8px; flex-wrap: wrap; }
+.pill { border: 1.5px solid currentColor; border-radius: 999px; padding: 2px 10px; font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.pill.ok { color: var(--approve); } .pill.ch { color: var(--change); } .pill.pe { color: var(--pending); }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.seg button { font: inherit; font-size: 13px; padding: 6px 10px; border: 0; background: var(--surface); color: var(--fg); cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button[aria-pressed="true"] { background: var(--fg); color: var(--bg); }
+.ctl { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); }
+.save-state { margin-left: auto; font-size: 13px; color: var(--muted); }
+button:focus-visible, textarea:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+
+/* Rows */
+.list { display: grid; gap: 20px; padding-top: 22px; }
+.row { display: grid; grid-template-columns: 320px minmax(0, 1fr); gap: 24px; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 18px; }
+@media (max-width: 760px) { .row { grid-template-columns: minmax(0, 1fr); justify-items: center; } .panel { width: 100%; } }
+.row[data-status="approved"] { border-left: 6px solid var(--approve); }
+.row[data-status="changes"] { border-left: 6px solid var(--change); }
+.panel { display: grid; gap: 12px; align-content: start; min-width: 0; }
+.panel h2 { font-size: 1.25rem; }
+.num { font-family: var(--font-display); color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+.panel p { margin: 0; color: var(--muted); max-width: 60ch; }
+.checks { margin: 0; padding-left: 18px; color: var(--muted); font-size: 14px; }
+.decide { display: flex; gap: 10px; flex-wrap: wrap; }
+.decide button { font: inherit; font-weight: 600; padding: 9px 16px; border-radius: 10px; cursor: pointer; border: 2px solid; background: transparent; }
+.decide .ok { color: var(--approve); border-color: var(--approve); }
+.decide .ch { color: var(--change); border-color: var(--change); }
+.decide .ok[aria-pressed="true"] { background: var(--approve); color: var(--surface); }
+.decide .ch[aria-pressed="true"] { background: var(--change); color: var(--surface); }
+textarea { width: 100%; min-height: 84px; font: inherit; color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 10px; resize: vertical; }
+.meta { font-size: 13px; color: var(--muted); }
+.statusword { font-weight: 700; }
+.statusword.approved { color: var(--approve); } .statusword.changes { color: var(--change); }
+
+/* ---------- Phone mock ---------- */
+.phone { width: 300px; max-width: 100%; aspect-ratio: 9 / 19.5; border-radius: 40px; padding: 10px; background: #0B0B0C; box-shadow: 0 1px 0 #333 inset, 0 12px 30px rgb(0 0 0 / .18); flex: none; }
+.app { --u: .8; --ts: 1; height: 100%; border-radius: 31px; overflow: hidden; display: flex; flex-direction: column;
+  background: var(--a-bg); color: var(--a-text); font-family: var(--font-app); font-size: calc(17px * var(--u) * var(--ts)); line-height: 1.3; position: relative; }
+.app.dark { --a-bg:#000000; --a-surface:#262626; --a-text:#FFFFFF; --a-text2:#D9D9D9; --a-accent:#FFD60A; --a-on:#000000; --a-warn:#FFA94D; --a-ok:#5BE37D; --a-btn2:#3D3D3D;
+  --a-water:#5AB0FF; --a-bunker:#F2D98C; --a-green:#4CD964; --a-fair:#6E6E6E; --a-ob:#FF7A7A; --a-pin:#FF6B6B; color-scheme: dark; }
+.app.light { --a-bg:#FFFFFF; --a-surface:#EDEDED; --a-text:#000000; --a-text2:#333333; --a-accent:#0033B3; --a-on:#FFFFFF; --a-warn:#7A2B00; --a-ok:#00561F; --a-btn2:#D6D6D6;
+  --a-water:#0047B3; --a-bunker:#7A5C00; --a-green:#0B6E2E; --a-fair:#8A8A8A; --a-ob:#A3001B; --a-pin:#B3001E; color-scheme: light; }
+.sbar { display: flex; justify-content: space-between; padding: 8px 22px 2px; font-size: 11px; font-weight: 600; flex: none; }
+.scroll { flex: 1; overflow-y: auto; overflow-x: hidden; padding: 6px 13px 14px; display: flex; flex-direction: column; gap: calc(13px * var(--u)); scrollbar-width: thin; }
+.pinned { padding: 10px 13px 14px; flex: none; background: var(--a-bg); }
+.a-title { font-size: calc(28px * var(--u) * var(--ts)); font-weight: 700; text-align: center; line-height: 1.15; }
+.a-t2 { font-size: calc(22px * var(--u) * var(--ts)); font-weight: 700; }
+.a-t3 { font-size: calc(20px * var(--u) * var(--ts)); }
+.a-head { font-size: calc(17px * var(--u) * var(--ts)); font-weight: 600; }
+.a-foot { font-size: calc(13px * var(--u) * var(--ts)); }
+.a-center { text-align: center; }
+.a-muted { color: var(--a-text2); }
+.a-warn { color: var(--a-warn); } .a-ok { color: var(--a-ok); } .a-acc { color: var(--a-accent); }
+.btn { display: flex; align-items: center; justify-content: center; text-align: center; min-height: calc(64px * var(--u)); border-radius: 11px; padding: 6px 10px;
+  font-size: calc(22px * var(--u) * var(--ts)); font-weight: 700; width: 100%; }
+.btn.p { background: var(--a-accent); color: var(--a-on); }
+.btn.s { background: var(--a-btn2); color: var(--a-text); border: 2px solid var(--a-text); }
+.cbtn { display: flex; align-items: center; justify-content: center; text-align: center; min-height: calc(48px * var(--u)); border-radius: 8px; padding: 4px 8px;
+  font-size: calc(17px * var(--u) * var(--ts)); font-weight: 600; background: var(--a-btn2); color: var(--a-text); border: 2px solid var(--a-text); width: 100%; }
+.astack { display: flex; gap: 8px; }
+.app.ax .astack { flex-direction: column; }
+.choice .btn { font-size: calc(18px * var(--u) * var(--ts)); min-height: calc(52px * var(--u)); }
+.card { background: var(--a-surface); border-radius: 10px; padding: 10px; }
+.kv { display: flex; gap: 6px; justify-content: space-between; }
+.kv > :first-child { color: var(--a-text2); }
+.app.ax .kv { flex-direction: column; gap: 0; }
+.media { border-radius: 10px; overflow: hidden; position: relative; width: 100%; }
+.media svg { display: block; width: 100%; height: auto; }
+.hh { background: var(--a-surface); padding: 6px 10px 8px; display: grid; gap: 6px; flex: none; }
+.hh .r { display: flex; gap: 6px; align-items: center; }
+.hh .chev { width: 44px; flex: none; }
+.hh .mid { flex: 1; text-align: center; min-width: 0; }
+.list-a { background: var(--a-surface); border-radius: 10px; overflow: hidden; }
+.list-a > div { padding: 9px 10px; border-bottom: 1px solid color-mix(in srgb, var(--a-text) 18%, transparent); }
+.list-a > div:last-child { border-bottom: 0; }
+.sec { font-size: calc(13px * var(--u) * var(--ts)); text-transform: uppercase; letter-spacing: .04em; color: var(--a-text2); margin-top: 4px; }
+.tog { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.sw { width: 40px; height: 24px; border-radius: 12px; background: var(--a-ok); position: relative; flex: none; border: 2px solid var(--a-text); }
+.sw::after { content: ""; position: absolute; top: 1px; right: 1px; width: 18px; height: 18px; border-radius: 50%; background: #fff; }
+.sw.off { background: var(--a-btn2); } .sw.off::after { left: 1px; right: auto; }
+.check { color: var(--a-accent); font-weight: 700; }
+.spinner { width: 46px; height: 46px; border-radius: 50%; border: 5px solid color-mix(in srgb, var(--a-accent) 25%, transparent); border-top-color: var(--a-accent); margin: 40px auto 6px; animation: spin 1s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spinner { animation: none; } }
+.big-num { font-size: calc(96px * var(--u) * var(--ts)); font-weight: 900; text-align: center; line-height: 1; font-variant-numeric: tabular-nums; }
+.example { font-size: 12px; color: var(--muted); }
+</style>
+
+<div class="wrap">
+  <header class="intro">
+    <span class="eyebrow">VIGBT 0.10.0 · iOS app · design review</span>
+    <h1>Approve each screen</h1>
+    <p>These mock-ups follow the SwiftUI code and use the app's own tested colour palettes. Switch the app theme and text size to check them the way low-vision golfers will see them. Approve a screen or request changes with a comment. Your decisions are saved here, and Claude reads them to make the changes.</p>
+    <p class="example">Distances, course names and shot numbers on these screens are examples.</p>
+  </header>
+
+  <div class="bar" role="toolbar" aria-label="Review controls">
+    <div class="tally" aria-live="polite">
+      <span class="pill ok" id="t-ok">0 approved</span>
+      <span class="pill ch" id="t-ch">0 changes</span>
+      <span class="pill pe" id="t-pe">16 to review</span>
+    </div>
+    <div class="ctl">App theme
+      <div class="seg" data-group="theme">
+        <button type="button" data-v="dark" aria-pressed="true">Dark</button>
+        <button type="button" data-v="light" aria-pressed="false">Light</button>
+      </div>
+    </div>
+    <div class="ctl">Text size
+      <div class="seg" data-group="ts">
+        <button type="button" data-v="1" aria-pressed="true">Default</button>
+        <button type="button" data-v="1.24" aria-pressed="false">Large</button>
+        <button type="button" data-v="1.7" aria-pressed="false">Accessibility XL</button>
+      </div>
+    </div>
+    <div class="ctl">Show
+      <div class="seg" data-group="filter">
+        <button type="button" data-v="all" aria-pressed="true">All</button>
+        <button type="button" data-v="pending" aria-pressed="false">To review</button>
+        <button type="button" data-v="changes" aria-pressed="false">Changes</button>
+      </div>
+    </div>
+    <span class="save-state" id="save-state">Connecting…</span>
+  </div>
+
+  <main class="list" id="list"></main>
+</div>
+
+<script>
+const VERSION = "0.10.0";
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+// ---------- shared mock pieces ----------
+const sbar = () => `<div class="sbar" aria-hidden="true"><span>9:41</span><span>●●● 5G ▮</span></div>`;
+const btn = (t, p = true) => `<div class="btn ${p ? "p" : "s"}">${t}</div>`;
+const cbtn = t => `<div class="cbtn">${t}</div>`;
+const astack = (...xs) => `<div class="astack">${xs.join("")}</div>`;
+const title = t => `<div class="a-title">${t}</div>`;
+const holeHeader = (sub = "152 yd to pin · 7-iron") => `<div class="hh">
+  <div class="r"><div class="cbtn chev">‹</div><div class="mid"><div class="a-t3" style="font-weight:700">Hole 4 · Par 4</div><div class="a-head a-acc">${sub}</div></div><div class="cbtn chev">›</div></div>
+  ${cbtn("🗺 Course layout")}</div>`;
+const choice = (label, opts, sel) => `<div class="choice" style="display:grid;gap:6px"><div class="a-head a-muted">${label}</div>
+  ${chunk(opts, 2).map(r => astack(...r.map(o => btn(o, o === sel)))).join("")}</div>`;
+const chunk = (a, n) => a.reduce((r, x, i) => (i % n ? r[r.length - 1].push(x) : r.push([x]), r), []);
+const kv = (k, v) => `<div class="kv"><span>${k}</span><b>${v}</b></div>`;
+
+const grassAR = () => `<div class="media" style="aspect-ratio:3/4;max-height:250px;background:repeating-linear-gradient(170deg,#3f7d36 0 18px,#4a8c3f 18px 36px)">
+  <svg viewBox="0 0 120 160" aria-hidden="true"><rect x="52" y="120" width="16" height="6" fill="#d9d1b8"/><circle cx="60" cy="116" r="6" fill="#ff4fa3" stroke="#000" stroke-width=".6"/>
+  <g stroke="var(--a-accent)" stroke-width="3"><line x1="60" y1="70" x2="60" y2="90"/><line x1="50" y1="80" x2="70" y2="80"/></g></svg></div>`;
+const teeCam = () => `<div class="media" style="aspect-ratio:16/9;background:linear-gradient(#a9cbe8 0 38%,#5c9a4b 38% 100%)">
+  <svg viewBox="0 0 160 90" aria-hidden="true"><path d="M0 34 Q80 28 160 34" stroke="#3d6d33" stroke-width="2" fill="none"/>
+  <circle cx="78" cy="72" r="4" fill="#ff4fa3" stroke="#000" stroke-width=".5"/><rect x="74" y="76" width="8" height="3" fill="#d9d1b8"/></svg></div>`;
+const tracer = () => `<div class="media" style="aspect-ratio:16/9;background:linear-gradient(#a9cbe8 0 38%,#5c9a4b 38% 100%)">
+  <svg viewBox="0 0 160 90" aria-hidden="true">
+    <path d="M78 72 C 82 52, 88 36, 96 22" stroke="#000" stroke-width="5" fill="none" stroke-linecap="round"/>
+    <path d="M78 72 C 82 52, 88 36, 96 22" stroke="#FFD60A" stroke-width="2.6" fill="none" stroke-linecap="round"/>
+    ${[[78,72],[80,62],[83,52],[86,43],[90,35],[93,28],[96,22]].map(([x,y]) => `<circle cx="${x}" cy="${y}" r="1.6" fill="#fff"/>`).join("")}
+    <path d="M96 22 L102 10 M98 15 L102 10 L104 16" stroke="#000" stroke-width="5" fill="none" stroke-linecap="round"/>
+    <path d="M96 22 L102 10 M98 15 L102 10 L104 16" stroke="#FFA94D" stroke-width="2.6" fill="none" stroke-linecap="round"/></svg></div>`;
+const highlight = () => `<div class="media" style="aspect-ratio:3/4;max-height:250px;background:radial-gradient(circle at 30% 40%,#3b3b3b,#262626 70%)">
+  <svg viewBox="0 0 120 160" aria-hidden="true"><circle cx="60" cy="80" r="16" fill="none" stroke="var(--a-accent)" stroke-width="2.5"/>
+  <circle cx="72" cy="66" r="5" fill="var(--a-accent)"/><circle cx="72" cy="66" r="11" fill="none" stroke="var(--a-pin)" stroke-width="3"/></svg></div>`;
+const holeMap = () => `<div class="media" style="background:var(--a-bg);border:2px solid var(--a-text)">
+  <svg viewBox="0 0 200 290" aria-hidden="true">
+    <defs>
+      <pattern id="waves-PID" width="12" height="8" patternUnits="userSpaceOnUse"><path d="M0 5 Q3 1 6 5 T12 5" stroke="var(--a-bg)" stroke-width="1.3" fill="none"/></pattern>
+      <pattern id="dots-PID" width="7" height="7" patternUnits="userSpaceOnUse"><circle cx="3" cy="3" r="1.2" style="fill:var(--a-bg)"/></pattern>
+    </defs>
+    <path d="M78 270 L74 170 L90 110 L104 60 L128 54 L122 118 L108 172 L112 270 Z" style="fill:var(--a-fair)" stroke="var(--a-text)" stroke-opacity=".6" stroke-width="1.5"/>
+    <rect x="40" y="186" width="120" height="22" rx="8" style="fill:var(--a-water)"/><rect x="40" y="186" width="120" height="22" rx="8" fill="url(#waves-PID)" stroke="var(--a-text)" stroke-width="2"/>
+    <rect x="126" y="112" width="24" height="26" rx="10" style="fill:var(--a-bunker)"/><rect x="126" y="112" width="24" height="26" rx="10" fill="url(#dots-PID)" stroke="var(--a-text)" stroke-width="2"/>
+    <ellipse cx="120" cy="40" rx="26" ry="18" style="fill:var(--a-green)" stroke="var(--a-text)" stroke-width="2"/>
+    <path d="M95 268 L93 170 L104 110 L118 44" stroke="var(--a-text)" stroke-width="1.5" stroke-dasharray="5 5" fill="none"/>
+    <line x1="118" y1="44" x2="118" y2="20" stroke="var(--a-text)" stroke-width="2.5"/><rect x="118" y="20" width="13" height="8" style="fill:var(--a-pin)" stroke="var(--a-text)"/>
+    <ellipse cx="108" cy="92" rx="16" ry="30" fill="none" stroke="var(--a-bg)" stroke-width="5"/><ellipse cx="108" cy="92" rx="16" ry="30" fill="none" stroke="var(--a-accent)" stroke-width="3" stroke-dasharray="6 4"/>
+    <circle cx="95" cy="268" r="5" style="fill:var(--a-text)"/>
+    <circle cx="92" cy="226" r="7" style="fill:var(--a-bg)"/><circle cx="92" cy="226" r="5" style="fill:var(--a-accent)"/>
+    ${[["Water",100,197],["Sand",138,152],["Pin",118,10],["Search zone",108,132],["You",126,226],["Tee",95,284]].map(([t,x,y]) =>
+      `<g><rect x="${x - t.length * 3.2 - 4}" y="${y - 7}" width="${t.length * 6.4 + 8}" height="13" rx="3" style="fill:var(--a-bg)" stroke="var(--a-text)" stroke-width=".8"/><text x="${x}" y="${y + 3}" text-anchor="middle" font-size="9" font-weight="700" style="fill:var(--a-text)">${t}</text></g>`).join("")}
+  </svg></div>`;
+
+// ---------- screens (from App/Sources/Views) ----------
+const SCREENS = [
+  { id: "onboarding", name: "Welcome and safety notice", file: "OnboardingView",
+    why: "First launch: what VIGBT does, the safety notice, and permission prompts.",
+    checks: ["Is the safety wording right for your users?", "Is it clear nothing is uploaded?"],
+    body: () => `<div class="scroll">${title("Welcome to VIGBT")}
+      <div class="a-t3">VIGBT measures your golf shot with the iPhone camera on a tripod at the tee, estimates where the ball landed, and guides you to it with sound and vibration.</div>
+      <div class="card" style="border:3px solid var(--a-warn)"><div class="a-t2 a-warn">⚠ Safety</div><div class="a-t3">VIGBT is a navigation aid only. It does not detect hazards, obstacles, water, other golfers, carts or flying balls. Always use your usual mobility aids and the help of a sighted guide or caddie where you normally would.</div></div>
+      <div>VIGBT will ask to use the camera, microphone, location and motion sensors. Everything is processed on this iPhone and nothing is uploaded.</div>
+      ${btn("I understand")}${cbtn("Settings")}</div>` },
+  { id: "setup", name: "Set up at the tee", file: "SetupView",
+    why: "LiDAR calibration, ball colour, compass sighting, course and wind.",
+    checks: ["Is the order of steps right?", "Is \"Sight the flag\" clear enough for a helper?"],
+    body: () => `${holeHeader("383 yd · Driver")}<div class="scroll">${title("Set up at the tee")}${grassAR()}
+      <div class="a-t2 a-center">Locked: 3.2 m to the tee.</div>
+      ${choice("Ball colour", ["Pink (best)", "Orange", "White", "Sampled"], "Pink (best)")}
+      ${btn("Sample ball colour", false)}${btn("Start")}
+      <div class="a-head">Compass corrected by 2°.</div>${cbtn("Sight the flag to correct the compass")}
+      ${astack(cbtn("Change course"), cbtn("End round"))}${astack(cbtn("Wind: moderate (10 mph)"), cbtn("Simulated shot"))}${astack(cbtn("Shot history"), cbtn("Settings"))}</div>` },
+  { id: "ready", name: "Ready (listening for the strike)", file: "ArmedView",
+    why: "Camera running at 120 fps, waiting for the sound of the strike.",
+    checks: ["Is the club picker easy to change?", "Should Test Strike be less prominent?"],
+    body: () => `${holeHeader()}<div class="scroll">${title("Ready")}${teeCam()}
+      <div class="a-t2 a-center" style="font-weight:400">Listening for the strike. Take your shot.</div>
+      <div class="a-head a-center">2 free shots left today</div>
+      ${astack(cbtn("Club: 7-iron ▾"), cbtn("My bag"))}${cbtn("Wind: moderate (10 mph)")}
+      ${btn("Test Strike", false)}${btn("Recalibrate", false)}${astack(cbtn("Simulated shot"), cbtn("Shot history"), cbtn("Settings"))}</div>` },
+  { id: "processing", name: "Measuring the shot", file: "ProcessingView",
+    why: "Shown for a second or two while the clip is analysed.",
+    checks: ["Is the spoken message enough here?"],
+    body: () => `<div class="scroll"><div class="spinner" role="img" aria-label="Working"></div><div class="a-t2 a-center">Shot captured. Measuring…</div></div>` },
+  { id: "replay", name: "Your shot (replay and readout)", file: "ReplayView",
+    why: "Slow-motion tracer, launch numbers, predicted stop and search zone.",
+    checks: ["Are the stats in the right order?", "Is \"Expected stop\" clear?"],
+    body: () => `<div class="scroll">${title("Your shot")}${tracer()}${cbtn("Pause replay")}
+      <div class="a-t3 a-center" style="font-weight:700">Ball speed 112 miles per hour. Launch angle 17 degrees. Direction 2 degrees right. Estimated carry 158 yards. It should stop about 163 yards out, 6 yards right.</div>
+      <div class="card" style="display:grid;gap:6px">${kv("Ball speed", "112 mph")}${kv("Launch angle", "17°")}${kv("Direction", "2° right")}${kv("Carry", "158 yd")}${kv("Offline", "6 yd right")}${kv("Expected stop", "163 yd")}${kv("Search zone", "± 32 yd long, ± 16 yd wide")}</div>
+      ${btn("Walk to ball")}${btn("Next shot (same tee)", false)}${btn("New tee", false)}${cbtn("Shot history")}</div>` },
+  { id: "walk", name: "Walking to your ball", file: "WalkView",
+    why: "Huge distance, direction arrow and spoken guidance while the beacon plays.",
+    checks: ["Is the number big enough?", "Is \"Turn left 20 degrees\" the right wording?"],
+    body: () => `${holeHeader("163 yd to ball")}<div class="scroll">${title("Walking to your ball")}
+      <div class="big-num">112</div><div class="a-title" style="font-weight:400">yards</div>
+      <svg viewBox="0 0 100 100" width="40%" style="align-self:center;transform:rotate(-20deg)" aria-hidden="true"><path d="M50 8 L82 48 H62 V92 H38 V48 H18 Z" style="fill:var(--a-warn)" stroke="var(--a-text)" stroke-width="3"/></svg>
+      <div class="a-title" style="font-size:calc(24px*var(--u)*var(--ts))">Turn left 20 degrees</div>
+      ${btn("Repeat distance")}${btn("Scan ground now", false)}${btn("End", false)}</div>` },
+  { id: "homing", name: "Finding your ball (ball highlight)", file: "HomingView",
+    why: "Close-range scan: ticks speed up as the ball is centred; ball highlight for low vision.",
+    checks: ["Is the ring around the ball visible enough?", "Are zoom buttons useful?"],
+    body: () => `<div class="scroll">${title("Finding your ball")}${highlight()}
+      <div class="a-t2 a-center">Ball in view, about 3 metres</div><div class="a-center">Faster ticks mean the ball is closer to the centre.</div>
+      ${astack(cbtn("Zoom out"), `<div class="a-head a-center" style="align-self:center;min-width:70px">Zoom 2×</div>`, cbtn("Zoom in"))}
+      ${btn("I found it")}${btn("Back to walking guidance", false)}</div>` },
+  { id: "found", name: "Ball found", file: "FoundView",
+    why: "Confirmation after the haptic lock, with the next step.",
+    checks: ["Should this screen also offer the next club?"],
+    body: () => `<div class="scroll"><svg viewBox="0 0 100 100" width="40%" style="align-self:center;margin-top:20px" aria-hidden="true"><circle cx="50" cy="50" r="44" style="fill:var(--a-ok)"/><path d="M30 52 L45 66 L72 36" stroke="var(--a-bg)" stroke-width="9" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      ${title("Ball found")}<div class="a-t2 a-center" style="font-weight:400">It is straight ahead of the camera, within two metres.</div>${btn("Next shot (same tee)")}${btn("New tee", false)}</div>` },
+  { id: "layout", name: "Course layout (with Return)", file: "CourseLayoutView",
+    why: "Hole drawn from open map data with patterns and labels; Return pinned at the bottom.",
+    checks: ["Is the map readable?", "Is Return always easy to find?"],
+    body: (pid) => `<div class="scroll">${title("Hole 4, par 4, 383 yards, stroke index 7.")}${holeMap().replaceAll("PID", pid)}
+      <div class="a-foot" style="display:grid;gap:3px"><b>Map key</b><span>■ Water (waves) · ■ Sand (dots) · ■ Green · ┅ Out of bounds (dashed)</span></div>
+      ${["Water across the line from 126 to 137 yards.", "Bunker on the right from 199 to 226 yards.", "Fairway bends right at 219 yards.", "Green: front 366, centre 380, back 399 yards. 33 yards deep."].map(t => `<div class="card a-t3">${t}</div>`).join("")}
+      ${astack(cbtn("Read hole"), cbtn("Mark tee"))}${astack(cbtn("Mark green"), cbtn("Set pin here"))}<div class="a-foot a-muted">© OpenStreetMap contributors (ODbL)</div></div>
+      <div class="pinned">${btn("Return")}</div>` },
+  { id: "courses", name: "Choose course", file: "CourseSheet",
+    why: "Nearby courses from OpenStreetMap, saved courses, import or mark on site.",
+    checks: ["Is it clear that a course is downloaded once and kept?"],
+    body: () => `<div class="scroll"><div class="a-t2">Choose course</div><div class="sec">Nearby (OpenStreetMap)</div>
+      <div class="list-a"><div class="a-acc a-head">⌖ Find courses near me</div><div><div class="a-t3" style="font-weight:700">Oak Hollow Golf Club</div><div class="a-muted">2.1 km away</div></div><div><div class="a-t3" style="font-weight:700">Riverside Links</div><div class="a-muted">4.8 km away</div></div></div>
+      <div class="sec">On this phone</div><div class="list-a"><div><div class="a-t3" style="font-weight:700">Home course</div><div class="a-muted">18 holes · Marked on site</div></div></div>
+      <div class="sec">Other ways to add a course</div><div class="list-a"><div class="a-acc a-head">Import a GeoJSON file</div><div class="a-muted">New course name… <span class="a-acc a-head" style="float:right">Mark on site</span></div></div>
+      <div class="a-foot a-muted">Course data © OpenStreetMap contributors, available under the Open Database License.</div></div>` },
+  { id: "round", name: "Round setup", file: "RoundSetupView",
+    why: "Tee set and starting hole (back nine and shotgun starts).",
+    checks: ["Is the wheel picker usable with VoiceOver for your users?"],
+    body: () => `<div class="scroll"><div class="a-t2">Oak Hollow Golf Club</div><div class="sec">Tee set</div>
+      <div class="list-a">${["White", "Yellow", "Red"].map((t, i) => `<div class="tog"><span class="a-t3">${t}</span>${i === 0 ? '<span class="check">✓</span>' : ""}</div>`).join("")}</div>
+      <div class="sec">Starting hole</div><div class="list-a" style="text-align:center"><div class="a-muted">Hole 9, par 3</div><div class="a-t3" style="font-weight:700">Hole 10, par 4</div><div class="a-muted">Hole 11, par 5</div></div>
+      <div class="a-foot a-muted">Pick 10 for a back-nine start, or any hole for a shotgun start.</div>${btn("Start round on hole 10")}</div>` },
+  { id: "wind", name: "Wind", file: "WindSheet",
+    why: "Strength and where the wind comes from, felt facing the target.",
+    checks: ["Are 8 directions too many?", "Is the wording natural?"],
+    body: () => `<div class="scroll">${title("Wind")}<div class="a-t3 a-center">Face your target. How strong is the wind, and where do you feel it coming from?</div>
+      ${choice("Strength", ["Calm", "Light (5 mph)", "Moderate (10 mph)", "Strong (15 mph)", "Very strong (20 mph)"], "Moderate (10 mph)")}
+      ${choice("Coming from", ["Into you", "Into you, from the right", "From the right", "Behind you, from the right", "Behind you (helping)", "Behind you, from the left", "From the left", "Into you, from the left"], "From the left")}
+      ${btn("Save wind")}${btn("Clear wind", false)}</div>` },
+  { id: "bag", name: "My bag", file: "ClubBagView",
+    why: "Clubs carried and their carry distances, learned from tracked shots.",
+    checks: ["Should learned and typed distances look different?"],
+    body: () => `<div class="scroll"><div class="a-t2">My bag</div><div class="list-a">
+      ${[["Driver", "Carry 224 yards (learned)"], ["3-wood", "Carry 200 yards"], ["5-wood", "Carry 185 yards"], ["4-hybrid", "Carry 170 yards"], ["7-iron", "Carry 143 yards (learned)"], ["Pitching wedge", "Carry 110 yards"]].map(([c, d]) =>
+        `<div style="display:grid;gap:4px"><div class="tog"><span class="a-t3" style="font-weight:700">${c}</span><span class="sw"></span></div><div class="tog"><span>${d}</span><span class="cbtn" style="width:auto;padding:2px 10px">− +</span></div></div>`).join("")}
+      <div class="tog"><span class="a-t3" style="font-weight:700">2-hybrid</span><span class="sw off"></span></div></div>
+      <div class="a-foot a-muted">Carries are learned from your tracked shots after 3 shots with a club. A distance you enter yourself always wins.</div></div>` },
+  { id: "settings", name: "Settings (display)", file: "DisplaySettingsView",
+    why: "High-contrast theme choice, ball highlight, version.",
+    checks: ["Should text size be adjustable here too, or only in iOS Settings?"],
+    body: () => `<div class="scroll"><div class="a-t2">Settings</div><div class="sec">Display</div>
+      <div class="list-a">${["High contrast dark", "High contrast light", "Match system"].map((t, i) => `<div class="tog"><span class="a-t3">${t}</span>${i === 0 ? '<span class="check">✓</span>' : ""}</div>`).join("")}</div>
+      <div class="a-foot a-muted">Both themes keep all text at 7 to 1 contrast or better. Text size follows your iPhone's Text Size setting, including the largest accessibility sizes.</div>
+      <div class="list-a"><div class="tog"><span>Ball highlight while finding the ball</span><span class="sw"></span></div></div>
+      <div class="list-a"><div>Version 0.9.0 (9)</div><div class="a-foot">Open source under the Apache License 2.0. Course data © OpenStreetMap contributors (ODbL).</div></div></div>` },
+  { id: "paywall", name: "VIGBT Pro", file: "PaywallView",
+    why: "One-time unlock; explains that buying supports an open-source project.",
+    checks: ["Is the price placement right?", "Is the open-source note welcome here?"],
+    body: () => `<div class="scroll">${title("VIGBT Pro")}<div class="a-t3" style="display:grid;gap:6px">
+      <span>∞ Unlimited shots</span><span>◎ Carry distance and landing zone</span><span>◖ Walk-to-ball spatial audio guidance</span><span>☝ Haptic ball finder</span><span>⚑ Club recommendations</span></div>
+      <div class="a-head">One-time purchase. No subscription. Works offline. VIGBT is open source: buying it supports development.</div>
+      ${btn("Unlock for $19.99")}${btn("Restore purchase", false)}${btn("Not now", false)}</div>` },
+  { id: "history", name: "Shot history", file: "HistoryView",
+    why: "Last 30 shots; each opens its replay and walk-to-ball.",
+    checks: ["Is the date line useful, or should it show the hole?"],
+    body: () => `<div class="scroll"><div class="a-t2">Shot history</div><div class="list-a">
+      ${[["7-iron, 158 yd carry", "Today, 9:41"], ["Driver, 231 yd carry", "Today, 9:20"], ["Simulated, Pitching wedge, 96 yd carry", "Yesterday, 16:05"], ["Not measured", "Yesterday, 15:58"]].map(([a, b]) =>
+        `<div><div class="a-t3" style="font-weight:700">${a}</div><div class="a-muted">${b}</div></div>`).join("")}</div></div>` },
+];
+
+// ---------- state ----------
+const state = { theme: "dark", ts: 1, filter: "all", reviews: {}, db: null, offline: false };
+const queues = {};
+
+function statusOf(id) { return state.reviews[id]?.status || "pending"; }
+
+function renderPhone(s) {
+  const ax = state.ts >= 1.6 ? " ax" : "";
+  return `<div class="phone"><div class="app ${state.theme}${ax}" style="--ts:${state.ts}" role="img" aria-label="${esc(s.name)} mock-up">${sbar()}${s.body(s.id + "-" + state.theme)}</div></div>`;
+}
+
+function renderPanel(s, i) {
+  const r = state.reviews[s.id] || {};
+  const st = statusOf(s.id);
+  const when = r.updatedAt ? new Date(r.updatedAt).toLocaleString([], { dateStyle: "medium", timeStyle: "short" }) : "";
+  return `<span class="num">Screen ${i + 1} of ${SCREENS.length} · ${esc(s.file)}</span>
+    <h2>${esc(s.name)}</h2><p>${esc(s.why)}</p>
+    <ul class="checks">${s.checks.map(c => `<li>${esc(c)}</li>`).join("")}</ul>
+    <div class="decide">
+      <button type="button" class="ok" data-act="approved" aria-pressed="${st === "approved"}">Approve</button>
+      <button type="button" class="ch" data-act="changes" aria-pressed="${st === "changes"}">Request changes</button>
+    </div>
+    <label class="meta" for="c-${s.id}">What should change? (saved as you type)</label>
+    <textarea id="c-${s.id}" data-id="${s.id}" placeholder="For example: make the distance bigger, or say metres instead of yards.">${esc(r.comment || "")}</textarea>
+    <div class="meta" id="m-${s.id}">${st === "pending" ? "Not reviewed yet." : `<span class="statusword ${st}">${st === "approved" ? "Approved" : "Changes requested"}</span>${when ? ` · ${esc(when)}` : ""}`}</div>`;
+}
+
+function render() {
+  const list = document.getElementById("list");
+  list.innerHTML = SCREENS.map((s, i) => {
+    const st = statusOf(s.id);
+    const hidden = state.filter !== "all" && st !== state.filter;
+    return `<section class="row" id="row-${s.id}" data-status="${st}" ${hidden ? "hidden" : ""} aria-labelledby="h-${s.id}">
+      <div class="phone-slot">${renderPhone(s)}</div><div class="panel" id="p-${s.id}">${renderPanel(s, i)}</div></section>`;
+  }).join("");
+  SCREENS.forEach(s => { const h = document.querySelector(`#p-${s.id} h2`); if (h) h.id = "h-" + s.id; });
+  tally();
+}
+
+function renderPhones() {
+  SCREENS.forEach(s => { const slot = document.querySelector(`#row-${s.id} .phone-slot`); if (slot) slot.innerHTML = renderPhone(s); });
+}
+
+function refreshRow(id) {
+  const i = SCREENS.findIndex(s => s.id === id), s = SCREENS[i];
+  const row = document.getElementById("row-" + id);
+  if (!row) return;
+  const st = statusOf(id);
+  row.dataset.status = st;
+  row.hidden = state.filter !== "all" && st !== state.filter;
+  row.querySelectorAll(".decide button").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.act === st)));
+  const ta = row.querySelector("textarea");
+  if (ta && document.activeElement !== ta) ta.value = state.reviews[id]?.comment || "";
+  const r = state.reviews[id] || {};
+  const when = r.updatedAt ? new Date(r.updatedAt).toLocaleString([], { dateStyle: "medium", timeStyle: "short" }) : "";
+  document.getElementById("m-" + id).innerHTML = st === "pending" ? "Not reviewed yet." :
+    `<span class="statusword ${st}">${st === "approved" ? "Approved" : "Changes requested"}</span>${when ? ` · ${esc(when)}` : ""}`;
+  tally();
+}
+
+function tally() {
+  const c = { approved: 0, changes: 0, pending: 0 };
+  SCREENS.forEach(s => c[statusOf(s.id)]++);
+  document.getElementById("t-ok").textContent = `${c.approved} approved`;
+  document.getElementById("t-ch").textContent = `${c.changes} ${c.changes === 1 ? "change" : "changes"}`;
+  document.getElementById("t-pe").textContent = `${c.pending} to review`;
+}
+
+function setSave(text) { document.getElementById("save-state").textContent = text; }
+
+// One write at a time per screen; the latest state always wins.
+function persist(id) {
+  const doc = { ...state.reviews[id], version: VERSION, updatedAt: new Date().toISOString() };
+  state.reviews[id] = doc;
+  if (!state.db) { setSave(state.offline ? "Not saved: open this page in Claude to save reviews" : "Connecting…"); return; }
+  setSave("Saving…");
+  queues[id] = (queues[id] || Promise.resolve()).then(() => state.db.doc("reviews/" + id).set(doc))
+    .then(() => setSave("All changes saved"))
+    .catch(e => setSave(e?.code === "permission_denied" || e?.code === "not_granted"
+      ? "You can view but not save reviews on this page" : "Could not save. Check your connection and try again."));
+}
+
+document.addEventListener("click", e => {
+  const b = e.target.closest("button");
+  if (!b) return;
+  const seg = b.closest(".seg");
+  if (seg) {
+    seg.querySelectorAll("button").forEach(x => x.setAttribute("aria-pressed", String(x === b)));
+    const g = seg.dataset.group, v = b.dataset.v;
+    if (g === "theme") { state.theme = v; renderPhones(); }
+    if (g === "ts") { state.ts = Number(v); renderPhones(); }
+    if (g === "filter") { state.filter = v; SCREENS.forEach(s => refreshRow(s.id)); }
+    return;
+  }
+  if (b.dataset.act) {
+    const id = b.closest(".row").id.slice(4);
+    const cur = statusOf(id);
+    const next = cur === b.dataset.act ? "pending" : b.dataset.act;
+    state.reviews[id] = { ...(state.reviews[id] || {}), status: next, comment: document.getElementById("c-" + id).value };
+    refreshRow(id);
+    persist(id);
+    if (next === "changes") document.getElementById("c-" + id).focus();
+  }
+});
+
+const timers = {};
+document.addEventListener("input", e => {
+  const ta = e.target.closest("textarea[data-id]");
+  if (!ta) return;
+  const id = ta.dataset.id;
+  clearTimeout(timers[id]);
+  setSave("Typing…");
+  timers[id] = setTimeout(() => {
+    const prev = state.reviews[id] || {};
+    // Writing a comment on an unreviewed screen counts as a change request.
+    const status = prev.status && prev.status !== "pending" ? prev.status : (ta.value.trim() ? "changes" : "pending");
+    state.reviews[id] = { ...prev, status, comment: ta.value };
+    refreshRow(id);
+    persist(id);
+  }, 700);
+});
+
+render();
+
+(async () => {
+  const use = window.claude?.use;
+  if (!use) { state.offline = true; setSave("Not saved: open this page in Claude to save reviews"); return; }
+  const db = await window.claude.use("db");
+  if (!db) { state.offline = true; setSave("Sign in to save reviews"); return; }
+  state.db = db;
+  const t = setTimeout(() => setSave("Saved reviews are taking a while to load"), 10000);
+  db.collection("reviews").onSnapshot(snap => {
+    clearTimeout(t);
+    snap.docs.forEach(d => {
+      const data = d.data();
+      if (data && SCREENS.some(s => s.id === d.id)) state.reviews[d.id] = data;
+    });
+    SCREENS.forEach(s => refreshRow(s.id));
+    setSave(snap.empty ? "Ready: nothing reviewed yet" : "All changes saved");
+  }, () => { clearTimeout(t); setSave("Could not load saved reviews. Reload the page to try again."); });
+})();
+</script>

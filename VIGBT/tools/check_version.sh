@@ -10,6 +10,7 @@ check Sources/VIGBTCore/Models/Versioning.swift "public static let string = \"$v
 check CHANGELOG.md "## [$v]"
 check SPEC.md "Document version: $v"
 check App/project.yml "MARKETING_VERSION: \"$v\""
+check design/screen-review.html "const VERSION = \"$v\";"
 build=$(sed -n 's/.*public static let build = \([0-9]*\).*/\1/p' Sources/VIGBTCore/Models/Versioning.swift)
 check App/project.yml "CURRENT_PROJECT_VERSION: \"$build\""
 exit $fail

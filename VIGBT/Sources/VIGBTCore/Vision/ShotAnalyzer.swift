@@ -70,7 +70,7 @@ public struct ShotAnalyzer: Sendable {
                         referenceRadiusPixels: Double?, includeBallistics: Bool,
                         club: Club = .auto, spin: SpinEstimate? = nil, wind: Vector3 = .zero,
                         zone: SearchZoneCalibration? = nil, restingBall: DetectionCandidate? = nil,
-                        compassAndWindCorrected: Bool = false) -> ShotAnalysis {
+                        compassAndWindCorrected: Bool = false, rollMultiplier: Double = 1) -> ShotAnalysis {
         let expected = referenceRadiusPixels ?? CameraPose.expectedBallRadiusPixels(calibration: calibration)
         let gated = frames.map { sizeGate($0, expectedRadius: expected) }
         let track = tracker.track(frames: gated)
@@ -97,6 +97,7 @@ public struct ShotAnalyzer: Sendable {
                 let spin = spin ?? fittedSpin ?? SpinEstimator.estimate(club: club, launchAngleDeg: launch.launchAngleDeg)
                 var estimator = estimator
                 estimator.compassAndWindCorrected = compassAndWindCorrected
+                estimator.rollMultiplier = rollMultiplier
                 let est = estimator.estimate(launch: launch, calibration: calibration, spin: spin, wind: wind, zone: zone)
                 result.spin = est.spin
                 result.trajectory = est.trajectory

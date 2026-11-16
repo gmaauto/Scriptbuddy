@@ -159,3 +159,56 @@ final class WindCompassTests: XCTestCase {
         XCTAssertGreaterThan(b.coverageEllipse, 0.75, "tighter ellipse still covers most balls")
     }
 }
+
+/// Learning ground firmness from found balls (SPEC §12.6).
+final class RollLearnerTests: XCTestCase {
+    func testLearnsFirmerGround() {
+        var l = RollLearner()
+        XCTAssertEqual(l.multiplier, 1, accuracy: 1e-12)
+        // Balls keep rolling 1.5× as far as the nominal model predicts.
+        for _ in 0..<6 {
+            l.record(landing: (150, 0), nominalRest: (162, 0), found: (168, 1))
+        }
+        XCTAssertEqual(l.observations, 6)
+        XCTAssertEqual(l.multiplier, exp(6 * log(1.5) / 8), accuracy: 1e-9, "shrunk toward 1 by the 2-shot prior")
+        XCTAssertGreaterThan(l.multiplier, 1.3)
+    }
+
+    func testIgnoresTinyRollsAndClampsOutliers() {
+        var l = RollLearner()
+        l.record(landing: (100, 0), nominalRest: (102, 0), found: (130, 0)) // 2 m predicted roll: ignored
+        XCTAssertEqual(l.observations, 0)
+        l.record(landing: (100, 0), nominalRest: (110, 0), found: (400, 0)) // ratio 30 → clamped to 3
+        XCTAssertEqual(l.multiplier, exp(log(3) / 3), accuracy: 1e-9)
+    }
+
+    func testEstimatorScalesRollAndRemembersMultiplier() {
+        let cal = TeeCalibration(distanceToTeeMeters: 3, cameraPitchRadians: 0, cameraHeadingDeg: 0,
+                                 horizontalFOVRadians: 1.9, teeLocation: GeoCoordinate(latitude: 0, longitude: 0))
+        let launch = LaunchVector(ballSpeed: 65, launchAngleDeg: 11, azimuthDeg: 0)
+        var e = LandingZoneEstimator()
+        let nominal = e.estimate(launch: launch, calibration: cal).landing
+        e.rollMultiplier = 2
+        let firm = e.estimate(launch: launch, calibration: cal).landing
+        XCTAssertEqual(firm.restCarry - firm.carryMeters, 2 * (nominal.restCarry - nominal.carryMeters), accuracy: 1e-6)
+        XCTAssertEqual(firm.nominalRest.along, nominal.restCarry, accuracy: 1e-6, "nominal rest recoverable for learning")
+    }
+
+    func testShotFrameMatchesProjection() {
+        let tee = GeoCoordinate(latitude: 45, longitude: 7)
+        let p = GeoMath.project(teeLocation: tee, cameraHeadingDeg: 60, carryMeters: 150, lateralMeters: 12, searchRadiusMeters: 0)
+        let l = ShotFrame.local(p.coordinate, tee: tee, headingDeg: 60)
+        XCTAssertEqual(l.along, 150, accuracy: 0.05)
+        XCTAssertEqual(l.right, 12, accuracy: 0.05)
+    }
+
+    func testRollLearningHelpsWhenGroundIsSharedByARound() {
+        var base = MonteCarloConfig()
+        base.shots = 300
+        base.seed = 21
+        base.groundPerRound = true
+        var learned = base
+        learned.rollLearning = true
+        XCTAssertLessThan(MonteCarlo.run(learned).p90ErrorYards, MonteCarlo.run(base).p90ErrorYards + 0.5)
+    }
+}

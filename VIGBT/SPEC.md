@@ -1,9 +1,10 @@
 # Vision Impaired Golf Ball Tracker (VIGBT) — Master Technical & Commercial Specification
 
-Document version: 0.9.0 · Updated 2026-11-15 · Status: draft (not yet compiled or tested on a device)
+Document version: 0.10.0 · Updated 2026-11-15 · Status: draft (not yet compiled or tested on a device)
 
 | Version | Date | Changes |
 |---|---|---|
+| 0.10.0 | 2026-11-16 | §12.6 learning ground firmness; screen review workflow (§10, `design/`) |
 | 0.9.0 | 2026-11-15 | §12.5 wind input and compass correction; tighter search ellipse |
 | 0.8.0 | 2026-11-15 | §12 Monte Carlo validation (1M shots); reprojection fit with spin-axis estimation; bounce and roll; search ellipse |
 | 0.7.0 | 2026-11-15 | Phase 4.5: white-ball detector and ball-colour recommendation |
@@ -536,6 +537,11 @@ when its licence is compatible with Apache-2.0. Otherwise only the idea is used.
   - **Old files:** files from before this scheme (format 1, without the wrapper) are still read.
   - **Newer files:** a file written by a newer app version is never overwritten. The app keeps it and asks
     the golfer to update.
+- **A new version for every decision.** Each implemented recommendation or new feature is a **minor**
+  release. Each batch of screen-review decisions from the review page is a **patch** release, whether
+  approvals or requested changes, and is logged in `design/approvals.md`, so every approved state of the
+  app can be named by its version. The review page (`design/screen-review.html`) shows the version and is
+  covered by the version check. The workflow is in `design/README.md`.
 - **Tags.** Each release is tagged `vX.Y.Z` on the commit that sets the version.
 - **Source files.** Individual source files do not carry version headers. Git history already records the
   version of every file, and per-file headers tend to go out of date.
@@ -633,7 +639,7 @@ and the compass are.
 
 1. **Done in 0.9.0 (§12.5).** **Ask the user for wind**, or use the phone's barometer and weather data where available offline. This
    is worth about 5 yd at p90.
-2. **Learn ground firmness per course** from found balls, extending `SearchZoneModel` to the roll
+2. **Done in 0.10.0 (§12.6).** **Learn ground firmness per course** from found balls, extending `SearchZoneModel` to the roll
    distance.
 3. **Done in 0.9.0 (§12.5), plus self-correction from found balls.** **Correct the compass** by sighting the target line at setup (point the phone at the green or pin):
    ±3° is about 10 yd at 200 yd.
@@ -679,6 +685,34 @@ Results (100,000 shots each; the last row is 1,000,000 shots, report in `docs/va
 - **Median error on pure strikes:** driver 16 yd (was 21), 7-iron 9.6 yd (was 12.5), wedge 6.2 yd (was 8.5).
 - **What's left:** the main remaining error is roll, from ground firmness the app cannot see (§12.4 item
   2), plus spin rate.
+
+### 12.6 Learning ground firmness (0.10.0)
+
+**Model change.** Real firmness is shared by a course on a day: weather, mowing and season. In this
+simulation each round of 30 shots therefore gets one firmness, with ±25% variation per shot and 30% of balls
+in rough, which rolls 1.8× less freely. Before 0.10.0 each shot drew its own firmness.
+
+**Learner.** `RollLearner` learns from each found ball:
+- **What it measures:** the roll that actually happened, measured from the predicted landing point along
+  the predicted roll direction, as a ratio of the roll the nominal ground model predicted.
+- **How it averages:** a geometric mean of these ratios, with a 2-shot prior at 1.0 and each ratio clamped
+  to 0.2–3.
+- **How it's used:** later predictions scale the roll by the learned multiplier.
+- **When it resets:** at each new round, or on a new day.
+
+Results, 1,000,000 shots each, with wind entered and the self-correcting compass (reports in
+`docs/validation/`):
+
+| | Without roll learning | With roll learning |
+|---|---|---|
+| Median error to rest | 11.1 yd | **9.9 yd** |
+| p90 | 34.9 yd | **30.8 yd** |
+| Along-line p90 | 33.1 yd | **28.5 yd** |
+| Search coverage | 86.2% | **88.2%** |
+| Pure strikes, median | — | driver 14.1, 7-iron 8.7, wedge 5.7 yd |
+
+Low launches (thin and topped shots) remain the weakest group at about 82% coverage, because their roll
+varies most between fairway and rough.
 
 These are model results: the physics, camera and noise figures are assumptions until they are checked
 against real recorded shots. Treat real-world capture as the next validation step.

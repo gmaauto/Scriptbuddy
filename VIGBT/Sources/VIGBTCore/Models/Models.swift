@@ -333,6 +333,8 @@ public struct LandingEstimate: Codable, Equatable, Sendable {
     /// Search ellipse semi-axes along the flight line and across it (SPEC §12).
     public var searchAlongMeters: Double?
     public var searchLateralMeters: Double?
+    /// `RollLearner` multiplier applied to the roll when this shot was predicted (nil before 0.10.0).
+    public var rollMultiplier: Double?
 
     public init(carryMeters: Double, lateralMeters: Double, searchRadiusMeters: Double, target: TargetCoordinate,
                 restCarryMeters: Double? = nil, restLateralMeters: Double? = nil,
@@ -350,6 +352,12 @@ public struct LandingEstimate: Codable, Equatable, Sendable {
     /// Rest position (falls back to the landing point for older shots).
     public var restCarry: Double { restCarryMeters ?? carryMeters }
     public var restLateral: Double { restLateralMeters ?? lateralMeters }
+    /// Rest point the nominal ground model predicted, undoing the roll multiplier (for `RollLearner`).
+    public var nominalRest: (along: Double, right: Double) {
+        let k = max(0.05, rollMultiplier ?? 1)
+        return (carryMeters + (restCarry - carryMeters) / k, lateralMeters + (restLateral - lateralMeters) / k)
+    }
+
     public var rollMeters: Double {
         ((restCarry - carryMeters) * (restCarry - carryMeters) + (restLateral - lateralMeters) * (restLateral - lateralMeters)).squareRoot()
     }

@@ -64,6 +64,8 @@ final class VersioningTests: XCTestCase {
         XCTAssertTrue(try read("SPEC.md").contains("Document version: \(v)"), "SPEC.md header must state \(v)")
         XCTAssertTrue(try read("App/project.yml").contains("MARKETING_VERSION: \"\(v)\""))
         XCTAssertTrue(try read("App/project.yml").contains("CURRENT_PROJECT_VERSION: \"\(VIGBTVersion.build)\""))
+        XCTAssertTrue(try read("design/screen-review.html").contains("const VERSION = \"\(v)\";"),
+                      "the screen-review page must show the current version")
     }
 
     func testSemanticVersionShape() {

@@ -377,7 +377,18 @@ def run(args):
         wind_flight = wind * rng.normal(1.0, 0.2, n)[:, None]
         # Truth.
         lp, lv = fly(v0, spin, tilt, wind_flight, rho)
-        g_e, g_mb, g_mr = rng.uniform(0.25, 0.45, n), rng.uniform(0.4, 0.6, n), rng.uniform(0.15, 0.4, n)
+        if args.ground_model == "round":
+            # One course firmness per round (weather, mowing), then per-shot variation and 30% rough.
+            m = args.round_size
+            rounds = -(-n // m)
+            g_e = np.repeat(rng.uniform(0.25, 0.45, rounds), m)[:n]
+            g_mb = np.repeat(rng.uniform(0.4, 0.6, rounds), m)[:n]
+            g_mr = np.repeat(rng.uniform(0.15, 0.4, rounds), m)[:n] * rng.uniform(0.8, 1.25, n)
+            rough = rng.random(n) < 0.3
+            g_mr = np.where(rough, g_mr * 1.8, g_mr)
+            g_e = np.where(rough, g_e * 0.8, g_e)
+        else:
+            g_e, g_mb, g_mr = rng.uniform(0.25, 0.45, n), rng.uniform(0.4, 0.6, n), rng.uniform(0.15, 0.4, n)
         rest_true = bounce_roll(lp, lv, g_e, g_mb, g_mr)
         # Observation + extraction.
         track = early_track(v0, spin, tilt, wind_flight, rho)
@@ -399,6 +410,8 @@ def run(args):
             rest_pred = bounce_roll(plp, plv, g_e, g_mb, g_mr)
         else:
             rest_pred = bounce_roll(plp, plv, 0.35, 0.5, 0.25) if args.roll else plp
+            if args.roll and args.ground_learning:
+                rest_pred = learn_roll(plp, rest_pred, rest_true, args)
         # Compass heading error rotates the whole prediction about the tee.
         he, compass_ok = heading_errors(n, rest_pred, rest_true, rng, args)
         def rot(P):
@@ -426,6 +439,30 @@ def run(args):
         print(f"  {done:>9,} shots  ({time.time() - t0:5.0f} s)", flush=True)
     D = {k: np.concatenate([r[k] for r in rows]) for k in rows[0]}
     report(D, args)
+
+
+def learn_roll(land_pred, rest_nominal, rest_true, args):
+    """RollLearner (SPEC §12.6): within a round, each found ball gives observed roll / predicted roll along
+    the predicted roll direction; the geometric mean with a 2-shot prior at 1.0 scales later predictions."""
+    n = len(land_pred)
+    m = args.round_size
+    d = rest_nominal[:, :2] - land_pred[:, :2]
+    dl = np.linalg.norm(d, axis=1)
+    u = d / np.maximum(dl, 1e-9)[:, None]
+    obs = ((rest_true[:, :2] - land_pred[:, :2]) * u).sum(1)
+    usable = dl > 4
+    logr = np.log(np.clip(obs / np.maximum(dl, 1e-9), 0.2, 3.0))
+    k = np.ones(n)
+    for start in range(0, n, m):
+        acc, cnt = 0.0, 0
+        for j in range(start, min(n, start + m)):
+            k[j] = math.exp(acc / (cnt + args.roll_prior))
+            if usable[j]:
+                acc += logr[j]
+                cnt += 1
+    out = rest_nominal.copy()
+    out[:, :2] = land_pred[:, :2] + d * k[:, None]
+    return out
 
 
 def heading_errors(n, rest_pred, rest_true, rng, args):
@@ -470,7 +507,7 @@ def report(D, args):
     print()
     print(f"VIGBT Monte Carlo: {len(ok):,} shots, seed {args.seed}, fit={args.fit}, anchor={args.anchor}, "
           f"placement yaw {args.placement_yaw:.0f}°, fit_spin={args.fit_spin}, weighted={args.weighted}, "
-          f"roll={args.roll}, wind_input={args.wind_input}, heading={args.heading_mode}, min radius {args.min_radius_px}px, heading σ {args.heading_sigma}°")
+          f"roll={args.roll}, ground={args.ground_model}, ground_learning={args.ground_learning}, wind_input={args.wind_input}, heading={args.heading_mode}, min radius {args.min_radius_px}px, heading σ {args.heading_sigma}°")
     print(f"Tracked (≥4 frames, valid launch): {ok.mean() * 100:.2f}%   "
           f"frames followed: median {np.median(D['nframes']):.0f}, p10 {pct(D['nframes'], 10):.0f}")
     e = D["err"][ok] / YD; el = D["err_land"][ok] / YD; c = D["carry"][ok]
@@ -575,5 +612,10 @@ if __name__ == "__main__":
     ap.add_argument("--heading-mode", choices=["raw", "sighted", "session"], default="raw")
     ap.add_argument("--session-size", type=int, default=8, help="shots per tripod setup (session mode)")
     ap.add_argument("--session-shrinkage", type=float, default=1.0)
+    ap.add_argument("--ground-model", choices=["iid", "round"], default="iid",
+                    help="iid: firmness random per shot; round: one firmness per round + per-shot/rough variation")
+    ap.add_argument("--round-size", type=int, default=30, help="shots per round (ground-model round)")
+    ap.add_argument("--ground-learning", type=int, default=0, help="learn a roll multiplier per round from found balls")
+    ap.add_argument("--roll-prior", type=float, default=2.0)
     ap.add_argument("--ideal", type=int, default=0, help="1 = no measurement noise or calibration error")
     run(ap.parse_args())

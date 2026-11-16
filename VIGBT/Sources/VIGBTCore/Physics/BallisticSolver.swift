@@ -235,6 +235,8 @@ public struct LandingZoneEstimator: Sendable {
     public var calibratedLowLaunchLateralFactor: Double = 0.08
     /// Set by the caller when both corrections apply to this shot.
     public var compassAndWindCorrected: Bool = false
+    /// Scales the predicted roll (from `RollLearner`); 1 = nominal ground.
+    public var rollMultiplier: Double = 1
     /// Floor on the search radius so very short shots still get a usable zone.
     public var minimumSearchRadiusMeters: Double
     /// Predict bounce and roll and target the rest position (recommended).
@@ -267,8 +269,8 @@ public struct LandingZoneEstimator: Sendable {
         if predictRoll, let last = traj.samples.last {
             // Physics frame has +y = left; LandingEstimate reports lateral as + = right.
             let rest = RollModel.rest(landing: Vector3(carry, -lateral, 0), velocity: last.velocity, ground: ground)
-            restCarry = rest.x
-            restLateral = -rest.y
+            restCarry = carry + rollMultiplier * (rest.x - carry)
+            restLateral = lateral + rollMultiplier * (-rest.y - lateral)
         }
 
         let tight = compassAndWindCorrected
@@ -294,9 +296,10 @@ public struct LandingZoneEstimator: Sendable {
                                      carryMeters: restCarry,
                                      lateralMeters: restLateral,
                                      searchRadiusMeters: radius)
-        let landing = LandingEstimate(carryMeters: carry, lateralMeters: lateral, searchRadiusMeters: radius,
+        var landing = LandingEstimate(carryMeters: carry, lateralMeters: lateral, searchRadiusMeters: radius,
                                       target: target, restCarryMeters: restCarry, restLateralMeters: restLateral,
                                       searchAlongMeters: along, searchLateralMeters: across)
+        landing.rollMultiplier = predictRoll ? rollMultiplier : nil
         return (spin, traj, landing)
     }
 }

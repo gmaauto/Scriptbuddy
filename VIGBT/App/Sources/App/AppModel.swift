@@ -25,6 +25,10 @@ final class AppModel {
     var activeWind: WindInput? { wind.flatMap { $0.isStale() ? nil : $0 } }
     /// Compass correction for the current tripod setup (sighting and/or found balls).
     private(set) var compassLearner = SessionCompassLearner()
+    /// How far balls are rolling today on this course (SPEC §12.6); reset each new round or day.
+    private(set) var rollLearner = RollLearner()
+    @ObservationIgnored private var rollLearnerDay = Calendar.current.startOfDay(for: Date())
+    @ObservationIgnored private var rollLearnerRoundID: String?
     /// Raw averaged compass heading of the current setup, before correction.
     @ObservationIgnored private var rawCameraHeadingDeg: Double?
     var errorMessage: String?
@@ -162,6 +166,17 @@ final class AppModel {
         arm()
     }
 
+    /// Firmness belongs to one course on one day: start learning afresh for a new round or a new day.
+    private func refreshRollLearnerScope() {
+        let today = Calendar.current.startOfDay(for: Date())
+        let roundKey = self.round.state.map { "\($0.courseID)#\($0.startingHole)" }
+        if today != rollLearnerDay || roundKey != rollLearnerRoundID {
+            rollLearner = RollLearner()
+            rollLearnerDay = today
+            rollLearnerRoundID = roundKey
+        }
+    }
+
     /// Applies the current compass correction to a calibration built from the raw heading.
     private func correctedCalibration(_ cal: TeeCalibration) -> TeeCalibration {
         var c = cal
@@ -275,12 +290,15 @@ final class AppModel {
         let zone = SearchZoneModel.calibration(for: club, shots: store.shots)
         let windVector = activeWind?.vector(cameraHeadingDeg: cal.cameraHeadingDeg) ?? .zero
         let corrected = compassLearner.isCorrected && activeWind != nil
+        refreshRollLearnerScope()
+        let roll = rollLearner.multiplier
         analysisTask = Task {
             do {
                 let out = try await Task.detached(priority: .userInitiated) {
                     try await ClipAnalysisService.analyze(clip: clip, calibration: cal, profile: profile,
                                                           includeBallistics: ballistics, club: club, zone: zone,
-                                                          wind: windVector, compassAndWindCorrected: corrected)
+                                                          wind: windVector, compassAndWindCorrected: corrected,
+                                                          rollMultiplier: roll)
                 }.value
                 let a = out.analysis
                 let shot = ShotRecord(ballProfile: profile, calibration: cal, centroids: a.centroids,
@@ -442,6 +460,13 @@ final class AppModel {
                 compassLearner.recordFoundBall(tee: shot.calibration.teeLocation, predicted: target, found: p,
                                                appliedErrorDeg: shot.calibration.compassCorrectionDeg ?? 0)
                 if let cal = calibration { calibration = correctedCalibration(cal) }
+            }
+            // …and how far balls roll on this course today.
+            if let landing = shot.landing {
+                refreshRollLearnerScope()
+                let found = ShotFrame.local(p, tee: shot.calibration.teeLocation, headingDeg: shot.calibration.cameraHeadingDeg)
+                rollLearner.record(landing: (landing.carryMeters, landing.lateralMeters),
+                                   nominalRest: landing.nominalRest, found: found)
             }
         }
         scanner.stop()

@@ -6,6 +6,17 @@ All notable changes to VIGBT are recorded here. The format follows
 
 Versions before 1.0.0 are development builds that have not yet been compiled or tested on a device.
 
+## [0.10.0] - 2026-11-16
+
+### Added
+- `RollLearner`: learns how far balls roll on this course today from the balls the golfer finds, and scales later roll predictions. It resets for each new round or day. In a million-shot test with one ground firmness per round, the p90 error drops from 34.9 to 30.8 yd and search coverage rises from 86.2% to 88.2% (SPEC §12.6).
+- `ShotFrame` (converts between GPS coordinates and the shot's local frame); `LandingEstimate.rollMultiplier` and `nominalRest`.
+- Monte Carlo ground model with one firmness per round, per-shot variation and rough (`--ground-model round`, `--ground-learning`; Swift `groundPerRound`, `rollLearning`).
+- Screen review: `design/screen-review.html` (16 iOS screens in both themes and three text sizes, with Approve / Request changes), `design/README.md` (workflow) and `design/approvals.md` (decision log).
+
+### Changed
+- Versioning rule (SPEC §10): every implemented recommendation is a minor release, and every batch of screen-review decisions is a patch release. The review page's version is now part of the version check.
+
 ## [0.9.0] - 2026-11-15
 
 ### Added

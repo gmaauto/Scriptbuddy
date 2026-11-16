@@ -59,6 +59,11 @@ public struct MonteCarloConfig: Sendable {
     public var headingMode: HeadingMode = .raw
     /// Shots per tripod setup in `.session` mode.
     public var sessionSize: Int = 8
+    /// One ground firmness per round of `roundSize` shots (with per-shot and rough variation) instead of
+    /// independent firmness per shot; and whether `RollLearner` learns it from found balls (SPEC §12.6).
+    public var groundPerRound: Bool = false
+    public var roundSize: Int = 30
+    public var rollLearning: Bool = false
 
     public enum HeadingMode: String, Sendable {
         /// Compass as measured (±`headingSigmaDeg`).
@@ -148,12 +153,17 @@ public enum MonteCarlo {
         var inEllipse = 0, inLegacy = 0, tracked = 0
         var perStrike: [StrikeType: (count: Int, tracked: Int, errors: [Double])] = [:]
         var compass = CompassState()
+        var ground = GroundState()
 
         for i in 0..<config.shots {
             if i % max(1, config.sessionSize) == 0 {
                 compass = CompassState(sessionErrorDeg: rng.normal(0, config.headingSigmaDeg))
             }
-            let shot = simulateOne(config, &rng, &compass)
+            if i % max(1, config.roundSize) == 0 {
+                ground = GroundState(base: GroundModel(restitution: rng.uniform(0.25, 0.45), bounceFriction: rng.uniform(0.4, 0.6),
+                                                       rollingFriction: rng.uniform(0.15, 0.4)))
+            }
+            let shot = simulateOne(config, &rng, &compass, &ground)
             perStrike[shot.strike, default: (0, 0, [])].count += 1
             frames.append(Double(shot.framesFollowed))
             guard let e = shot.errorMeters else { continue }
@@ -208,7 +218,14 @@ public enum MonteCarlo {
         var learner = SessionCompassLearner()
     }
 
-    static func simulateOne(_ cfg: MonteCarloConfig, _ rng: inout SeededRandom, _ compass: inout CompassState) -> ShotOutcome {
+    /// Ground firmness shared by the shots of one round, and what has been learned about it.
+    struct GroundState {
+        var base = GroundModel()
+        var learner = RollLearner()
+    }
+
+    static func simulateOne(_ cfg: MonteCarloConfig, _ rng: inout SeededRandom, _ compass: inout CompassState,
+                            _ round: inout GroundState) -> ShotOutcome {
         // 1. Strike.
         let club = pick(clubs, weight: { $0.weight }, &rng)
         let strike = pick(StrikeType.allCases, weight: { $0.weight }, &rng)
@@ -248,8 +265,16 @@ public enum MonteCarlo {
         let userWind = Vector3(userSpeed * cos(Units.radians(towardSnapped)), userSpeed * sin(Units.radians(towardSnapped)), 0)
         var air = AerodynamicModel()
         air.airDensity = rng.uniform(1.12, 1.25)
-        let ground = GroundModel(restitution: rng.uniform(0.25, 0.45), bounceFriction: rng.uniform(0.4, 0.6),
+        var ground = GroundModel(restitution: rng.uniform(0.25, 0.45), bounceFriction: rng.uniform(0.4, 0.6),
                                  rollingFriction: rng.uniform(0.15, 0.4))
+        if cfg.groundPerRound {
+            ground = round.base
+            ground.rollingFriction *= rng.uniform(0.8, 1.25)
+            if rng.uniform(0, 1) < 0.3 { // rough
+                ground.rollingFriction *= 1.8
+                ground.restitution *= 0.8
+            }
+        }
 
         // 3. Truth: flight, then bounce and roll.
         let truth = BallisticSolver(model: air).solve(launch: trueLaunch, spin: trueSpin, wind: flightWind)
@@ -320,6 +345,7 @@ public enum MonteCarlo {
         guard est.launchAngleDeg > -5 else { return outcome }
         var estimator = LandingZoneEstimator()
         estimator.compassAndWindCorrected = cfg.windInput && compassCorrected
+        if cfg.rollLearning { estimator.rollMultiplier = round.learner.multiplier }
         let landing = estimator.estimate(launch: est, calibration: cal, spin: estSpin,
                                          wind: cfg.windInput ? userWind : .zero).landing
 
@@ -342,6 +368,11 @@ public enum MonteCarlo {
         outcome.insideEllipse = (along / A) * (along / A) + (across / L) * (across / L) <= 1
         let (la, lr) = rotated(landing.carryMeters, landing.lateralMeters)
         outcome.insideLegacy = ((la - ta) * (la - ta) + (lr - tr) * (lr - tr)).squareRoot() <= max(5, 0.08 * landing.carryMeters)
+        // The found ball teaches the roll learner (local frame: heading error is a separate effect).
+        if cfg.rollLearning {
+            round.learner.record(landing: (landing.carryMeters, landing.lateralMeters), nominalRest: landing.nominalRest,
+                                 found: (ta, tr))
+        }
         // Session mode: the golfer finds the ball, which teaches the learner this setup's compass error.
         // Local frame → GPS: camera heading 0 = north, so forward = north and right = east.
         if cfg.headingMode == .session {
