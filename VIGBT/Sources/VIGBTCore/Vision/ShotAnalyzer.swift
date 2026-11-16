@@ -70,7 +70,8 @@ public struct ShotAnalyzer: Sendable {
                         referenceRadiusPixels: Double?, includeBallistics: Bool,
                         club: Club = .auto, spin: SpinEstimate? = nil, wind: Vector3 = .zero,
                         zone: SearchZoneCalibration? = nil, restingBall: DetectionCandidate? = nil,
-                        compassAndWindCorrected: Bool = false, rollMultiplier: Double = 1) -> ShotAnalysis {
+                        compassAndWindCorrected: Bool = false, rollMultiplier: Double = 1,
+                        surfaceMap: SurfaceMap? = nil) -> ShotAnalysis {
         let expected = referenceRadiusPixels ?? CameraPose.expectedBallRadiusPixels(calibration: calibration)
         let gated = frames.map { sizeGate($0, expectedRadius: expected) }
         let track = tracker.track(frames: gated)
@@ -98,7 +99,8 @@ public struct ShotAnalyzer: Sendable {
                 var estimator = estimator
                 estimator.compassAndWindCorrected = compassAndWindCorrected
                 estimator.rollMultiplier = rollMultiplier
-                let est = estimator.estimate(launch: launch, calibration: calibration, spin: spin, wind: wind, zone: zone)
+                let est = estimator.estimate(launch: launch, calibration: calibration, spin: spin, wind: wind, zone: zone,
+                                             surfaceMap: surfaceMap)
                 result.spin = est.spin
                 result.trajectory = est.trajectory
                 result.landing = est.landing
@@ -171,6 +173,11 @@ public enum Readout {
         let lateral = Units.yards(fromMeters: l.restLateral)
         let side = abs(lateral) < 2 ? "on line" : "\(whole(abs(lateral))) yards \(lateral > 0 ? "right" : "left")"
         var text = "Estimated carry \(whole(carry)) yards."
+        switch l.landingSurface {
+        case .water?: text += " It may have gone in the water."
+        case let s? where s != .fairway: text += " It should land \(s.phrase)."
+        default: break
+        }
         if l.rollMeters >= Units.meters(fromYards: 2) {
             text += " It should stop about \(whole(restOut)) yards out, \(side)."
         } else {

@@ -6,6 +6,19 @@ All notable changes to VIGBT are recorded here. The format follows
 
 Versions before 1.0.0 are development builds that have not yet been compiled or tested on a device.
 
+## [0.12.0] - 2026-11-16
+
+### Added
+- `SurfaceMap` and `Surface`:
+  - The hole's mapped fairways, green, bunkers and water decide the roll physics for the predicted landing point (rough, green, bunker and water each have their own).
+  - The readout and stats say what the ball lands on ("It should land in the rough.", "It may have gone in the water.").
+  - In a million-shot test, the p90 error drops from 31.1 to 28.5 yd and search coverage rises from 87.9% to 89.4% (SPEC §12.8).
+- Monte Carlo `--surface-model fairway` (rough by landing outside a fairway) and `--map-surface`.
+
+### Changed
+- `LandingEstimate.landingSurface`; `LandingZoneEstimator.estimate`, `ShotAnalyzer.analyze` and `ClipAnalysisService.analyze` take a `surfaceMap`.
+- The "Your shot" screen gains a "Lands" row and a surface sentence, so it is marked for review again.
+
 ## [0.11.0] - 2026-11-16
 
 ### Added

@@ -384,10 +384,18 @@ def run(args):
             g_e = np.repeat(rng.uniform(0.25, 0.45, rounds), m)[:n]
             g_mb = np.repeat(rng.uniform(0.4, 0.6, rounds), m)[:n]
             g_mr = np.repeat(rng.uniform(0.15, 0.4, rounds), m)[:n] * rng.uniform(0.8, 1.25, n)
-            rough = rng.random(n) < 0.3
+            if args.surface_model == "fairway":
+                # Fairway of half-width 13–22 m along the target line (one per round); landing outside it is rough.
+                fairway_hw = np.repeat(rng.uniform(13, 22, rounds), m)[:n]
+                rough = np.abs(lp[:, 1]) > fairway_hw
+            else:
+                fairway_hw = np.full(n, np.inf)
+                rough = rng.random(n) < 0.3
             g_mr = np.where(rough, g_mr * 1.8, g_mr)
             g_e = np.where(rough, g_e * 0.8, g_e)
         else:
+            fairway_hw = np.full(n, np.inf)
+            rough = np.zeros(n, bool)
             g_e, g_mb, g_mr = rng.uniform(0.25, 0.45, n), rng.uniform(0.4, 0.6, n), rng.uniform(0.15, 0.4, n)
         rest_true = bounce_roll(lp, lv, g_e, g_mb, g_mr)
         # Observation + extraction.
@@ -409,7 +417,12 @@ def run(args):
         if args.oracle_ground:
             rest_pred = bounce_roll(plp, plv, g_e, g_mb, g_mr)
         else:
-            rest_pred = bounce_roll(plp, plv, 0.35, 0.5, 0.25) if args.roll else plp
+            if args.map_surface and args.roll:
+                # Course map: predict fairway or rough from the predicted landing point's distance off the line.
+                pr_rough = np.abs(plp[:, 1]) > fairway_hw
+                rest_pred = bounce_roll(plp, plv, np.where(pr_rough, 0.35 * 0.8, 0.35), 0.5, np.where(pr_rough, 0.25 * 1.8, 0.25))
+            else:
+                rest_pred = bounce_roll(plp, plv, 0.35, 0.5, 0.25) if args.roll else plp
             if args.roll and args.ground_learning:
                 rest_pred = learn_roll(plp, rest_pred, rest_true, args)
         # Compass heading error rotates the whole prediction about the tee.
@@ -507,7 +520,7 @@ def report(D, args):
     print()
     print(f"VIGBT Monte Carlo: {len(ok):,} shots, seed {args.seed}, fit={args.fit}, anchor={args.anchor}, "
           f"placement yaw {args.placement_yaw:.0f}°, fit_spin={args.fit_spin}, weighted={args.weighted}, "
-          f"roll={args.roll}, ground={args.ground_model}, ground_learning={args.ground_learning}, wind_input={args.wind_input}, heading={args.heading_mode}, min radius {args.min_radius_px}px, heading σ {args.heading_sigma}°")
+          f"roll={args.roll}, ground={args.ground_model}/{args.surface_model}, map_surface={args.map_surface}, ground_learning={args.ground_learning}, wind_input={args.wind_input}, heading={args.heading_mode}, min radius {args.min_radius_px}px, heading σ {args.heading_sigma}°")
     print(f"Tracked (≥4 frames, valid launch): {ok.mean() * 100:.2f}%   "
           f"frames followed: median {np.median(D['nframes']):.0f}, p10 {pct(D['nframes'], 10):.0f}")
     e = D["err"][ok] / YD; el = D["err_land"][ok] / YD; c = D["carry"][ok]
@@ -614,6 +627,9 @@ if __name__ == "__main__":
     ap.add_argument("--session-shrinkage", type=float, default=1.0)
     ap.add_argument("--ground-model", choices=["iid", "round"], default="iid",
                     help="iid: firmness random per shot; round: one firmness per round + per-shot/rough variation")
+    ap.add_argument("--surface-model", choices=["random", "fairway"], default="random",
+                    help="rough: 30%% at random, or by landing outside a 13–22 m half-width fairway")
+    ap.add_argument("--map-surface", type=int, default=0, help="predict fairway/rough roll from the course map")
     ap.add_argument("--round-size", type=int, default=30, help="shots per round (ground-model round)")
     ap.add_argument("--ground-learning", type=int, default=0, help="learn a roll multiplier per round from found balls")
     ap.add_argument("--roll-prior", type=float, default=2.0)

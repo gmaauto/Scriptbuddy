@@ -1,9 +1,10 @@
 # Vision Impaired Golf Ball Tracker (VIGBT) — Master Technical & Commercial Specification
 
-Document version: 0.11.0 · Updated 2026-11-15 · Status: draft (not yet compiled or tested on a device)
+Document version: 0.12.0 · Updated 2026-11-15 · Status: draft (not yet compiled or tested on a device)
 
 | Version | Date | Changes |
 |---|---|---|
+| 0.12.0 | 2026-11-16 | §12.8 course-map surfaces (fairway, rough, green, bunker, water) for roll and readout |
 | 0.11.0 | 2026-11-16 | §12.7 guided search pattern; walking guidance now ends at the near end of the search zone |
 | 0.10.1 | 2026-11-16 | All 16 screens approved in design review (`design/approvals.md`); no spec changes |
 | 0.10.0 | 2026-11-16 | §12.6 learning ground firmness; screen review workflow (§10, `design/`) |
@@ -749,6 +750,41 @@ always approaching from the tee; report in `docs/validation/search-pattern-100k.
   (more walking for few extra finds). Axis-then-spiral also did worse.
 - **White balls:** finding rates are no better, because detection range is the limit there, which is one
   more reason to recommend a pink ball (§4.5).
+
+### 12.8 Course-map surfaces (0.12.0)
+
+**Problem.** After roll learning, the remaining roll error comes mostly from *where* the ball lands: rough
+stops a ball far sooner than fairway. In the earlier simulation, rough was assigned at random to 30% of
+balls; in reality it depends on the landing point.
+
+**Model.** Each round gets a fairway 13–22 m half-width along the target line, and a ball landing outside
+it is in rough. Rough has 1.8× the rolling friction and 0.8× the bounce.
+
+**Change.** `SurfaceMap` takes the hole's mapped fairways, green, bunkers and water (OpenStreetMap or marked
+on site) and classifies the predicted landing point. Each surface has its own roll physics, layered on top
+of the learned firmness:
+
+| Surface | Roll physics |
+|---|---|
+| Fairway | The learned fairway model |
+| Rough | 1.8× rolling friction, 0.8× bounce |
+| Green | 0.5× rolling friction |
+| Bunker | Almost no bounce or roll |
+| Water | No roll |
+
+The readout and stats name the surface, for example "It should land in the rough." or "It may have gone
+in the water." On an unmapped hole, behaviour is unchanged.
+
+Results, 1,000,000 shots each (wind entered, self-correcting compass, roll learning, fairway-width rough;
+reports in `docs/validation/`):
+
+| | No map | Map surfaces |
+|---|---|---|
+| Median error to rest | 10.1 yd | **9.6 yd** |
+| p90 | 31.1 yd | **28.5 yd** |
+| Along-line p90 | 29.0 yd | **26.0 yd** |
+| Search coverage | 87.9% | **89.4%** |
+| Pure strikes, median | — | driver 13.7, 7-iron 8.8, wedge 5.8 yd |
 
 These are model results: the physics, camera and noise figures are assumptions until they are checked
 against real recorded shots. Treat real-world capture as the next validation step.

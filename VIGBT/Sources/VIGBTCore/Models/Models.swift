@@ -335,6 +335,8 @@ public struct LandingEstimate: Codable, Equatable, Sendable {
     public var searchLateralMeters: Double?
     /// `RollLearner` multiplier applied to the roll when this shot was predicted (nil before 0.10.0).
     public var rollMultiplier: Double?
+    /// What the course map says the ball lands on (nil when the hole is not mapped, or before 0.12.0).
+    public var landingSurface: Surface?
 
     public init(carryMeters: Double, lateralMeters: Double, searchRadiusMeters: Double, target: TargetCoordinate,
                 restCarryMeters: Double? = nil, restLateralMeters: Double? = nil,

@@ -1,0 +1,54 @@
+
+VIGBT Monte Carlo: 1,000,000 shots, seed 2026, fit=reprojection, anchor=1, placement yaw 0°, fit_spin=1, weighted=1, roll=1, ground=round/fairway, map_surface=1, ground_learning=1, wind_input=1, heading=session, min radius 1.0px, heading σ 3.0°
+Tracked (≥4 frames, valid launch): 100.00%   frames followed: median 36, p10 25
+Error to final rest (yd): median 9.6, p80 19.1, p90 28.5, p95 41.5
+Search-circle coverage (R = 8% of carry): aimed at landing point (v0.7) 14.7%  |  aimed at predicted rest 58.8%
+  radius needed for 80% coverage: 13.4% of carry
+  radius needed for 90% coverage: 22.0% of carry
+  radius needed for 95% coverage: 42.7% of carry
+Launch measurement error, ball speed: median +0.52 mph, p90 |2.93| mph
+Launch measurement error, launch angle: median -0.13 deg, p90 |1.01| deg
+Launch measurement error, azimuth: median -0.00 deg, p90 |0.52| deg
+Launch measurement error, spin rate: median -64.18 rpm, p90 |1873.06| rpm
+Launch measurement error, spin-axis tilt: median -0.09 deg, p90 |8.22| deg
+  ellipse for 80% coverage: along ±17.3% of carry, lateral ±9.4% of carry (area 90% of the equivalent circle)
+  ellipse for 90% coverage: along ±29.1% of carry, lateral ±12.6% of carry (area 76% of the equivalent circle)
+  80% ellipse for launch ≥ 8° (93.6% of shots): along ±14.9%, lateral ±8.6% of carry
+  80% ellipse for launch < 8° (6.4% of shots): along ±46.6%, lateral ±5.4% of predicted rest distance
+Shipped policy coverage (ellipse 22%/14%, tight 20%/10%, low-launch 45%/12%, min 5 m): 89.4% overall, 89.5% normal, 87.3% low; tight zone used for 87% of shots
+Along-line error p90 |26.0| yd, lateral p90 |12.1| yd (bias along +1.0, lateral -0.0)
+
+club    strike        share  tracked  med err  p90 err  cover@8% p90 %carry
+driver  pure          14.0%   100.0%     13.7     30.9     62.7%      15.0%
+driver  slice          5.3%   100.0%     12.8     29.3     63.7%      14.8%
+driver  hook           2.8%   100.0%     13.2     30.7     61.6%      15.7%
+driver  push           2.1%   100.0%     12.3     27.8     67.4%      13.5%
+driver  pull           2.1%   100.0%     12.4     27.6     67.9%      13.3%
+driver  thin/skull     2.8%   100.0%     35.4     97.6     14.5%      70.2%
+driver  fat            2.1%   100.0%     13.3     34.0     27.1%      40.8%
+driver  toe/heel       2.1%   100.0%     14.2     34.2     51.9%      19.7%
+driver  topped         1.0%   100.0%     52.2    138.7      4.3%   10375.7%
+driver  shank          0.4%   100.0%      9.9     24.0     23.9%      48.6%
+driver  pop-up         0.4%   100.0%     10.7     20.2     52.7%      13.6%
+7-iron  pure          16.0%   100.0%      8.8     18.7     68.6%      12.5%
+7-iron  slice          6.0%   100.0%      8.7     18.8     66.9%      12.7%
+7-iron  hook           3.2%   100.0%      8.5     18.0     68.7%      12.6%
+7-iron  push           2.4%   100.0%      8.6     17.9     70.4%      12.0%
+7-iron  pull           2.4%   100.0%      8.5     17.8     70.6%      12.0%
+7-iron  thin/skull     3.2%   100.0%     27.9     68.2     12.5%      55.0%
+7-iron  fat            2.4%   100.0%      7.6     17.2     36.8%      27.4%
+7-iron  toe/heel       2.4%   100.0%      8.2     17.8     62.7%      14.1%
+7-iron  topped         1.2%    99.7%     38.2    106.9      6.3%    8963.1%
+7-iron  shank          0.4%   100.0%      5.2     11.4     53.3%      33.4%
+7-iron  pop-up         0.4%   100.0%      9.9     16.1     21.1%      17.3%
+wedge   pure          10.0%   100.0%      5.8     12.0     73.4%      11.3%
+wedge   slice          3.8%   100.0%      5.9     12.3     70.8%      11.7%
+wedge   hook           2.0%   100.0%      5.8     12.3     71.5%      11.8%
+wedge   push           1.5%   100.0%      5.8     12.0     72.9%      11.4%
+wedge   pull           1.5%   100.0%      5.8     12.0     72.1%      11.4%
+wedge   thin/skull     2.0%   100.0%     22.5     43.7      6.3%      52.1%
+wedge   fat            1.5%   100.0%      4.7      9.8     59.1%      20.0%
+wedge   toe/heel       1.5%   100.0%      5.3     11.0     69.8%      12.2%
+wedge   topped         0.8%   100.0%     22.2     64.5     12.7%    5278.6%
+wedge   shank          0.2%   100.0%      2.8      5.9     87.3%      21.9%
+wedge   pop-up         0.3%   100.0%      8.1     12.9     18.7%      19.5%

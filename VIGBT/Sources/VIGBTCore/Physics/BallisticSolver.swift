@@ -257,7 +257,8 @@ public struct LandingZoneEstimator: Sendable {
 
     /// - Parameter zone: learned correction (`SearchZoneModel`), applied to the rest position; nil uses the defaults.
     public func estimate(launch: LaunchVector, calibration: TeeCalibration,
-                         spin: SpinEstimate? = nil, wind: Vector3 = .zero, zone: SearchZoneCalibration? = nil)
+                         spin: SpinEstimate? = nil, wind: Vector3 = .zero, zone: SearchZoneCalibration? = nil,
+                         surfaceMap: SurfaceMap? = nil)
         -> (spin: SpinEstimate, trajectory: TrajectorySolution, landing: LandingEstimate) {
         let spin = spin ?? SpinEstimator.estimate(launchAngleDeg: launch.launchAngleDeg)
         let traj = solver.solve(launch: launch, spin: spin, wind: wind)
@@ -266,9 +267,17 @@ public struct LandingZoneEstimator: Sendable {
 
         var restCarry = carry
         var restLateral = lateral
+        // Course map: roll physics for whatever the ball lands on (SPEC §12.8).
+        var surface: Surface?
+        if let map = surfaceMap, !map.isEmpty {
+            let landingPoint = GeoMath.project(teeLocation: calibration.teeLocation, cameraHeadingDeg: calibration.cameraHeadingDeg,
+                                               carryMeters: carry, lateralMeters: lateral, searchRadiusMeters: 0).coordinate
+            surface = map.surface(at: landingPoint)
+        }
+        let landingGround = surface?.ground(from: ground) ?? ground
         if predictRoll, let last = traj.samples.last {
             // Physics frame has +y = left; LandingEstimate reports lateral as + = right.
-            let rest = RollModel.rest(landing: Vector3(carry, -lateral, 0), velocity: last.velocity, ground: ground)
+            let rest = RollModel.rest(landing: Vector3(carry, -lateral, 0), velocity: last.velocity, ground: landingGround)
             restCarry = carry + rollMultiplier * (rest.x - carry)
             restLateral = lateral + rollMultiplier * (-rest.y - lateral)
         }
@@ -300,6 +309,7 @@ public struct LandingZoneEstimator: Sendable {
                                       target: target, restCarryMeters: restCarry, restLateralMeters: restLateral,
                                       searchAlongMeters: along, searchLateralMeters: across)
         landing.rollMultiplier = predictRoll ? rollMultiplier : nil
+        landing.landingSurface = surface
         return (spin, traj, landing)
     }
 }

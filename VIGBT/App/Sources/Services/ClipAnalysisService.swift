@@ -19,7 +19,7 @@ enum ClipAnalysisService {
     static func analyze(clip: CapturedClip, calibration: TeeCalibration, profile: BallColorProfile?,
                         includeBallistics: Bool, club: Club, zone: SearchZoneCalibration?,
                         wind: Vector3 = .zero, compassAndWindCorrected: Bool = false,
-                        rollMultiplier: Double = 1) async throws -> Output {
+                        rollMultiplier: Double = 1, surfaceMap: SurfaceMap? = nil) async throws -> Output {
         let asset = AVURLAsset(url: clip.url)
         guard let track = try await asset.loadTracks(withMediaType: .video).first else {
             throw CaptureError.exportFailed("Clip has no video.")
@@ -96,7 +96,7 @@ enum ClipAnalysisService {
                                               referenceRadiusPixels: reference, includeBallistics: includeBallistics,
                                               club: club, wind: wind, zone: zone, restingBall: restingBall,
                                               compassAndWindCorrected: compassAndWindCorrected,
-                                              rollMultiplier: rollMultiplier)
+                                              rollMultiplier: rollMultiplier, surfaceMap: surfaceMap)
         return Output(analysis: analysis, referenceRadiusPixels: reference)
     }
 

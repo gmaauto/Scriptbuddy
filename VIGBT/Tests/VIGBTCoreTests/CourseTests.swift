@@ -315,3 +315,46 @@ final class CourseTests: XCTestCase {
         XCTAssertEqual(learned.landing.searchRadiusMeters, 0.05 * learned.landing.restCarry, accuracy: 1e-6)
     }
 }
+
+/// Course-map surfaces for roll (SPEC §12.8).
+final class SurfaceMapTests: XCTestCase {
+    private let tee = GeoCoordinate(latitude: 40, longitude: -75)
+    private func d(_ m: Double, _ b: Double) -> GeoCoordinate { GeoMath.destination(from: tee, distanceMeters: m, bearingDeg: b) }
+    /// Rectangle along bearing 0 from `from` to `to` metres, `hw` either side.
+    private func strip(_ from: Double, _ to: Double, _ hw: Double, offset: Double = 0) -> [GeoCoordinate] {
+        [GeoMath.destination(from: d(from, 0), distanceMeters: hw - offset, bearingDeg: 270),
+         GeoMath.destination(from: d(to, 0), distanceMeters: hw - offset, bearingDeg: 270),
+         GeoMath.destination(from: d(to, 0), distanceMeters: hw + offset, bearingDeg: 90),
+         GeoMath.destination(from: d(from, 0), distanceMeters: hw + offset, bearingDeg: 90)]
+    }
+
+    func testClassifiesSurfaces() {
+        let map = SurfaceMap(fairways: [strip(50, 300, 18)], greens: [strip(300, 330, 12)],
+                             bunkers: [[d(200, 2), d(210, 2), d(210, 5), d(200, 5)]],
+                             water: [strip(120, 130, 40)])
+        XCTAssertEqual(map.surface(at: d(180, 0)), .fairway)
+        XCTAssertEqual(map.surface(at: GeoMath.destination(from: d(180, 0), distanceMeters: 25, bearingDeg: 90)), .rough)
+        XCTAssertEqual(map.surface(at: d(315, 0)), .green)
+        XCTAssertEqual(map.surface(at: d(125, 0)), .water, "water wins over fairway")
+        XCTAssertEqual(map.surface(at: d(205, 3.5)), .bunker)
+        XCTAssertEqual(SurfaceMap().surface(at: d(100, 0)), .fairway, "unmapped hole behaves as before")
+    }
+
+    func testRoughRollsLessAndReadoutSaysSo() {
+        let cal = TeeCalibration(distanceToTeeMeters: 3, cameraPitchRadians: 0, cameraHeadingDeg: 0,
+                                 horizontalFOVRadians: 1.9, teeLocation: tee)
+        let launch = LaunchVector(ballSpeed: 65, launchAngleDeg: 11, azimuthDeg: 0)
+        let e = LandingZoneEstimator()
+        let onFairway = e.estimate(launch: launch, calibration: cal, surfaceMap: SurfaceMap(fairways: [strip(0, 400, 20)])).landing
+        let inRough = e.estimate(launch: launch, calibration: cal, surfaceMap: SurfaceMap(fairways: [strip(0, 400, 20, offset: 60)])).landing
+        XCTAssertEqual(onFairway.landingSurface, .fairway)
+        XCTAssertEqual(inRough.landingSurface, .rough)
+        XCTAssertLessThan(inRough.rollMeters, onFairway.rollMeters)
+        XCTAssertTrue(Readout.landing(inRough).contains("It should land in the rough."))
+        XCTAssertFalse(Readout.landing(onFairway).contains("should land"))
+        let wet = e.estimate(launch: launch, calibration: cal, surfaceMap: SurfaceMap(water: [strip(0, 400, 20)])).landing
+        XCTAssertEqual(wet.landingSurface, .water)
+        XCTAssertLessThan(wet.rollMeters, 0.5)
+        XCTAssertTrue(Readout.landing(wet).contains("may have gone in the water"))
+    }
+}

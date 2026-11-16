@@ -297,13 +297,14 @@ final class AppModel {
         let corrected = compassLearner.isCorrected && activeWind != nil
         refreshRollLearnerScope()
         let roll = rollLearner.multiplier
+        let surfaces = round.currentHole.map(SurfaceMap.init(hole:))
         analysisTask = Task {
             do {
                 let out = try await Task.detached(priority: .userInitiated) {
                     try await ClipAnalysisService.analyze(clip: clip, calibration: cal, profile: profile,
                                                           includeBallistics: ballistics, club: club, zone: zone,
                                                           wind: windVector, compassAndWindCorrected: corrected,
-                                                          rollMultiplier: roll)
+                                                          rollMultiplier: roll, surfaceMap: surfaces)
                 }.value
                 let a = out.analysis
                 let shot = ShotRecord(ballProfile: profile, calibration: cal, centroids: a.centroids,
