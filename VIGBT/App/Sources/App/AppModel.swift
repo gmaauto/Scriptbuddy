@@ -399,7 +399,7 @@ final class AppModel {
         beacon.start()
         phase = .navigating
         let yards = Units.yards(fromMeters: entryTarget.distanceFromTeeMeters)
-        speak("Walking to the search zone. \(Readout.distance(yards: yards)). Follow the beacon.")
+        speak("\(Readout.distanceToSearchZone(yards: yards)). Follow the beacon.")
     }
 
     /// Ground-scanner detection range: a coloured ball stands out further away than a white one (§12.7).
@@ -427,7 +427,7 @@ final class AppModel {
         case .offLeft: dir = "Turn left."
         case .offRight: dir = "Turn right."
         }
-        speak("\(Readout.distance(yards: g.distanceRemainingYards)). \(dir)", interrupt: true)
+        speak("\(Readout.distanceToSearchZone(yards: g.distanceRemainingYards)). \(dir)", interrupt: true)
     }
 
     // MARK: Homing (Phase 4)

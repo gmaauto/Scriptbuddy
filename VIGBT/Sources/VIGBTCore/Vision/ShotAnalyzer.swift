@@ -199,4 +199,9 @@ public enum Readout {
     public static func distance(yards: Double) -> String {
         "\(whole(max(0, yards))) yards to go"
     }
+
+    /// Walking guidance leads to the near end of the search zone (SPEC §12.7), so say so.
+    public static func distanceToSearchZone(yards: Double) -> String {
+        "\(whole(max(0, yards))) yards to the search zone"
+    }
 }

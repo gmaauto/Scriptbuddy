@@ -6,6 +6,11 @@ All notable changes to VIGBT are recorded here. The format follows
 
 Versions before 1.0.0 are development builds that have not yet been compiled or tested on a device.
 
+## [0.13.2] - 2026-11-17
+
+### Fixed
+- Walk screen: the distance label read only "yards", and VoiceOver and speech said "yards to go", although since 0.11.0 the distance is to the near end of the search zone, not to the ball. The screen, VoiceOver and spoken guidance now all say "yards to the search zone", matching the reviewed design (`Readout.distanceToSearchZone`).
+
 ## [0.13.1] - 2026-11-17
 
 ### Documented

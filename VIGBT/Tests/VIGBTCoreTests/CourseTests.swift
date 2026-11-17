@@ -340,6 +340,11 @@ final class SurfaceMapTests: XCTestCase {
         XCTAssertEqual(SurfaceMap().surface(at: d(100, 0)), .fairway, "unmapped hole behaves as before")
     }
 
+    func testWalkReadoutNamesTheSearchZone() {
+        XCTAssertEqual(Readout.distanceToSearchZone(yards: 94.4), "94 yards to the search zone")
+        XCTAssertEqual(Readout.distanceToSearchZone(yards: -3), "0 yards to the search zone")
+    }
+
     func testRoughRollsLessAndReadoutSaysSo() {
         let cal = TeeCalibration(distanceToTeeMeters: 3, cameraPitchRadians: 0, cameraHeadingDeg: 0,
                                  horizontalFOVRadians: 1.9, teeLocation: tee)
