@@ -5,6 +5,7 @@ One row per decision, newest first. Updated from the review page's `reviews` col
 
 | Release | Screen | Decision | Reviewed design | Decided | Notes |
 |---|---|---|---|---|---|
+| 0.13.3 | Walking to your ball (`walk`) | Approved | 0.13.2 | 2026-11-17 | Re-review of the 0.11.0 change. "Yards to the search zone" is clear; keep "Turn left 20 degrees" wording |
 | 0.10.1 | Welcome and safety notice (`onboarding`) | Approved | 0.10.0 | 2026-11-16 | No changes requested |
 | 0.10.1 | Set up at the tee (`setup`) | Approved | 0.10.0 | 2026-11-16 | No changes requested |
 | 0.10.1 | Ready (listening for the strike) (`ready`) | Approved | 0.10.0 | 2026-11-16 | No changes requested |

@@ -1,9 +1,10 @@
 # Vision Impaired Golf Ball Tracker (VIGBT) — Master Technical & Commercial Specification
 
-Document version: 0.13.2 · Updated 2026-11-17 · Status: draft (not yet compiled or tested on a device)
+Document version: 0.13.3 · Updated 2026-11-17 · Status: draft (not yet compiled or tested on a device)
 
 | Version | Date | Changes |
 |---|---|---|
+| 0.13.3 | 2026-11-17 | Walk screen approved (re-review); replay mockup shows the full spoken readout |
 | 0.13.2 | 2026-11-17 | Walk screen says "yards to the search zone" on screen and in speech, matching the reviewed design |
 | 0.13.1 | 2026-11-17 | §12.11 wind-shear study: predictor keeps uniform wind (no app code change) |
 | 0.13.0 | 2026-11-16 | §12.10 trained-detector pipeline; §9.4 ballistics-engine research |

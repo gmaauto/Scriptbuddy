@@ -121,7 +121,7 @@ textarea { width: 100%; min-height: 84px; font: inherit; color: var(--fg); backg
 
 <div class="wrap">
   <header class="intro">
-    <span class="eyebrow">VIGBT 0.13.2 · iOS app · design review</span>
+    <span class="eyebrow">VIGBT 0.13.3 · iOS app · design review</span>
     <h1>Approve each screen</h1>
     <p>These mock-ups follow the SwiftUI code and use the app's own tested colour palettes. Switch the app theme and text size to check them the way low-vision golfers will see them. Approve a screen or request changes with a comment. Your decisions are saved here, and Claude reads them to make the changes.</p>
     <p class="example">Distances, course names and shot numbers on these screens are examples.</p>
@@ -160,7 +160,7 @@ textarea { width: 100%; min-height: 84px; font: inherit; color: var(--fg); backg
 </div>
 
 <script>
-const VERSION = "0.13.2";
+const VERSION = "0.13.3";
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
 // ---------- shared mock pieces ----------
@@ -248,7 +248,7 @@ const SCREENS = [
     why: "Slow-motion tracer, launch numbers, predicted stop and search zone.",
     checks: ["Is the surface sentence useful?", "Should water be announced more strongly?"],
     body: () => `<div class="scroll">${title("Your shot")}${tracer()}${cbtn("Pause replay")}
-      <div class="a-t3 a-center" style="font-weight:700">Ball speed 112 miles per hour. Launch angle 17 degrees. Direction 2 degrees right. Estimated carry 158 yards. It should land in the rough. It should stop about 161 yards out, 6 yards right.</div>
+      <div class="a-t3 a-center" style="font-weight:700">Ball speed 112 miles per hour. Launch angle 17 degrees. Direction 2 degrees right. Estimated carry 158 yards. It should land in the rough. It should stop about 161 yards out, 6 yards right. Search zone 32 yards long and 16 yards wide each way.</div>
       <div class="card" style="display:grid;gap:6px">${kv("Ball speed", "112 mph")}${kv("Launch angle", "17°")}${kv("Direction", "2° right")}${kv("Carry", "158 yd")}${kv("Offline", "6 yd right")}${kv("Lands", "Rough")}${kv("Expected stop", "161 yd")}${kv("Search zone", "± 32 yd long, ± 16 yd wide")}</div>
       ${btn("Walk to ball")}${btn("Next shot (same tee)", false)}${btn("New tee", false)}${cbtn("Shot history")}</div>` },
   { id: "walk", name: "Walking to your ball", file: "WalkView", changedIn: "0.11.0",

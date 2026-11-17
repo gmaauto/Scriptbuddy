@@ -6,6 +6,12 @@ All notable changes to VIGBT are recorded here. The format follows
 
 Versions before 1.0.0 are development builds that have not yet been compiled or tested on a device.
 
+## [0.13.3] - 2026-11-17
+
+### Design
+- Walk screen approved on re-review (`design/approvals.md`). "Yards to the search zone" and "Turn left 20 degrees" are kept.
+- Replay mockup on the review page now shows the full spoken readout, including the search-zone sentence the app already speaks.
+
 ## [0.13.2] - 2026-11-17
 
 ### Fixed
