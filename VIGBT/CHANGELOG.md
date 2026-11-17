@@ -6,6 +6,12 @@ All notable changes to VIGBT are recorded here. The format follows
 
 Versions before 1.0.0 are development builds that have not yet been compiled or tested on a device.
 
+## [0.13.1] - 2026-11-17
+
+### Documented
+- Wind-shear study (SPEC §12.11). A log-law wind profile in the predictor makes predictions worse whenever the golfer enters the wind: p90 error to rest rises from 29.3 to 31.7 yd and ellipse coverage falls from 90.2% to 85.6%. It helps only when the wind is known exactly. The predictor therefore keeps uniform wind; no app code change.
+- `tools/monte_carlo.py`: `--shear-truth` and `--shear-predict` take a profile strength from 0 (uniform) to 1 (full log law). Report: `docs/validation/wind-shear-sweep-30k.txt`.
+
 ## [0.13.0] - 2026-11-16
 
 ### Added

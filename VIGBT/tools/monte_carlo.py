@@ -31,7 +31,19 @@ YD = 0.9144
 MPH = 0.44704
 
 
-def accel(v, t, axis, omega0, wind, rho):
+Z0, ZREF = 0.03, 1.7  # log-law roughness (short grass) and the height where the golfer feels the wind
+
+
+def shear_factor(z, strength=1.0):
+    """Log-law wind profile (SPEC §12.11): wind at height z relative to wind felt at ZREF.
+    strength blends between uniform wind (0) and the full log law (1)."""
+    full = np.log(np.maximum(z, Z0 * 1.01) / Z0) / math.log(ZREF / Z0)
+    return 1 + strength * (full - 1)
+
+
+def accel(v, t, axis, omega0, wind, rho, z=None, shear=1.0):
+    if z is not None:
+        wind = wind * shear_factor(z, shear)[:, None]
     vr = v - wind
     sp = np.linalg.norm(vr, axis=1, keepdims=True)
     sp = np.maximum(sp, 1e-6)
@@ -56,7 +68,7 @@ def spin_axis(v0, tilt_deg):
     return ax / np.linalg.norm(ax, axis=1, keepdims=True)
 
 
-def fly(v0, rpm, tilt, wind, rho, dt=0.02, tmax=15.0):
+def fly(v0, rpm, tilt, wind, rho, dt=0.02, tmax=15.0, shear=0.0):
     """RK4 to first ground crossing. Returns landing position (N,3), landing velocity (N,3)."""
     n = len(v0)
     p = np.zeros((n, 3))
@@ -71,10 +83,11 @@ def fly(v0, rpm, tilt, wind, rho, dt=0.02, tmax=15.0):
         a_ = active
         pp, vv, tt = p[a_], v[a_], t[a_]
         ax, o, w, r = axis[a_], om[a_], wind[a_], rho[a_]
-        k1v = accel(vv, tt, ax, o, w, r); k1p = vv
-        k2v = accel(vv + k1v * dt / 2, tt + dt / 2, ax, o, w, r); k2p = vv + k1v * dt / 2
-        k3v = accel(vv + k2v * dt / 2, tt + dt / 2, ax, o, w, r); k3p = vv + k2v * dt / 2
-        k4v = accel(vv + k3v * dt, tt + dt, ax, o, w, r); k4p = vv + k3v * dt
+        zz = (lambda q: q[:, 2]) if shear > 0 else (lambda q: None)
+        k1v = accel(vv, tt, ax, o, w, r, zz(pp), shear); k1p = vv
+        k2v = accel(vv + k1v * dt / 2, tt + dt / 2, ax, o, w, r, zz(pp + k1p * dt / 2), shear); k2p = vv + k1v * dt / 2
+        k3v = accel(vv + k2v * dt / 2, tt + dt / 2, ax, o, w, r, zz(pp + k2p * dt / 2), shear); k3p = vv + k2v * dt / 2
+        k4v = accel(vv + k3v * dt, tt + dt, ax, o, w, r, zz(pp + k3p * dt), shear); k4p = vv + k3v * dt
         np_ = pp + (k1p + 2 * k2p + 2 * k3p + k4p) * dt / 6
         nv = vv + (k1v + 2 * k2v + 2 * k3v + k4v) * dt / 6
         landed = np_[:, 2] < 0
@@ -180,17 +193,18 @@ def level(cx, cy, cz, pitch, roll):
     return x1, y2, z2  # right, down, forward
 
 
-def early_track(v0, rpm, tilt, wind, rho):
+def early_track(v0, rpm, tilt, wind, rho, shear=0.0):
     """Positions relative to the tee at frames 1..KMAX (RK4 at the frame interval)."""
     n = len(v0)
     p = np.zeros((n, 3)); v = v0.copy(); t = np.zeros(n)
     axis = spin_axis(v0, tilt); om = rpm * 2 * math.pi / 60
     out = np.zeros((n, KMAX, 3)); dt = 1 / FPS
     for k in range(KMAX):
-        k1v = accel(v, t, axis, om, wind, rho); k1p = v
-        k2v = accel(v + k1v * dt / 2, t + dt / 2, axis, om, wind, rho); k2p = v + k1v * dt / 2
-        k3v = accel(v + k2v * dt / 2, t + dt / 2, axis, om, wind, rho); k3p = v + k2v * dt / 2
-        k4v = accel(v + k3v * dt, t + dt, axis, om, wind, rho); k4p = v + k3v * dt
+        zz = (lambda q: q[:, 2]) if shear > 0 else (lambda q: None)
+        k1v = accel(v, t, axis, om, wind, rho, zz(p), shear); k1p = v
+        k2v = accel(v + k1v * dt / 2, t + dt / 2, axis, om, wind, rho, zz(p + k1p * dt / 2), shear); k2p = v + k1v * dt / 2
+        k3v = accel(v + k2v * dt / 2, t + dt / 2, axis, om, wind, rho, zz(p + k2p * dt / 2), shear); k3p = v + k2v * dt / 2
+        k4v = accel(v + k3v * dt, t + dt, axis, om, wind, rho, zz(p + k3p * dt), shear); k4p = v + k3v * dt
         p = p + (k1p + 2 * k2p + 2 * k3p + k4p) * dt / 6
         v = v + (k1v + 2 * k2v + 2 * k3v + k4v) * dt / 6
         t = t + dt
@@ -376,7 +390,7 @@ def run(args):
         # The air the ball actually flies through gusts +/-20% around the base wind.
         wind_flight = wind * rng.normal(1.0, 0.2, n)[:, None]
         # Truth.
-        lp, lv = fly(v0, spin, tilt, wind_flight, rho)
+        lp, lv = fly(v0, spin, tilt, wind_flight, rho, shear=args.shear_truth)
         if args.ground_model == "round":
             # One course firmness per round (weather, mowing), then per-shot variation and 30% rough.
             m = args.round_size
@@ -399,7 +413,7 @@ def run(args):
             g_e, g_mb, g_mr = rng.uniform(0.25, 0.45, n), rng.uniform(0.4, 0.6, n), rng.uniform(0.15, 0.4, n)
         rest_true = bounce_roll(lp, lv, g_e, g_mb, g_mr)
         # Observation + extraction.
-        track = early_track(v0, spin, tilt, wind_flight, rho)
+        track = early_track(v0, spin, tilt, wind_flight, rho, shear=args.shear_truth)
         vel, nframes, ok, _, est_rpm, est_tilt = observe_and_extract(track, rng, args, pred_rpm=pred_spin)
         # Prediction: club spin table, no tilt (spin axis is not observable), no wind, nominal ground.
         sp = np.linalg.norm(vel, axis=1)
@@ -412,7 +426,7 @@ def run(args):
         if args.fit_spin:
             rows_spin = (est_rpm - spin, est_tilt - tilt)
         p_wind = wind_flight if args.oracle_wind else (wind_user if args.wind_input else np.zeros((n, 3)))
-        plp, plv = fly(vel, p_spin, p_tilt, p_wind, rho if args.oracle_wind else rho_n)
+        plp, plv = fly(vel, p_spin, p_tilt, p_wind, rho if args.oracle_wind else rho_n, shear=args.shear_predict)
         land_pred = plp
         if args.oracle_ground:
             rest_pred = bounce_roll(plp, plv, g_e, g_mb, g_mr)
@@ -520,7 +534,7 @@ def report(D, args):
     print()
     print(f"VIGBT Monte Carlo: {len(ok):,} shots, seed {args.seed}, fit={args.fit}, anchor={args.anchor}, "
           f"placement yaw {args.placement_yaw:.0f}°, fit_spin={args.fit_spin}, weighted={args.weighted}, "
-          f"roll={args.roll}, ground={args.ground_model}/{args.surface_model}, map_surface={args.map_surface}, ground_learning={args.ground_learning}, wind_input={args.wind_input}, heading={args.heading_mode}, min radius {args.min_radius_px}px, heading σ {args.heading_sigma}°")
+          f"roll={args.roll}, shear truth/predict={args.shear_truth}/{args.shear_predict}, ground={args.ground_model}/{args.surface_model}, map_surface={args.map_surface}, ground_learning={args.ground_learning}, wind_input={args.wind_input}, heading={args.heading_mode}, min radius {args.min_radius_px}px, heading σ {args.heading_sigma}°")
     print(f"Tracked (≥4 frames, valid launch): {ok.mean() * 100:.2f}%   "
           f"frames followed: median {np.median(D['nframes']):.0f}, p10 {pct(D['nframes'], 10):.0f}")
     e = D["err"][ok] / YD; el = D["err_land"][ok] / YD; c = D["carry"][ok]
@@ -621,6 +635,8 @@ if __name__ == "__main__":
     ap.add_argument("--low-launch-deg", type=float, default=8.0)
     ap.add_argument("--low-along", type=float, default=0.45)
     ap.add_argument("--low-lateral", type=float, default=0.12)
+    ap.add_argument("--shear-truth", type=float, default=0.0, help="true wind profile strength: 0 uniform, 1 full log law (felt at 1.7 m)")
+    ap.add_argument("--shear-predict", type=float, default=0.0, help="profile strength the predictor applies to the entered wind")
     ap.add_argument("--wind-input", type=int, default=0, help="1 = golfer enters wind (strength preset + 8 directions)")
     ap.add_argument("--heading-mode", choices=["raw", "sighted", "session"], default="raw")
     ap.add_argument("--session-size", type=int, default=8, help="shots per tripod setup (session mode)")

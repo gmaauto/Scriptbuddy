@@ -1,9 +1,10 @@
 # Vision Impaired Golf Ball Tracker (VIGBT) — Master Technical & Commercial Specification
 
-Document version: 0.13.0 · Updated 2026-11-15 · Status: draft (not yet compiled or tested on a device)
+Document version: 0.13.1 · Updated 2026-11-17 · Status: draft (not yet compiled or tested on a device)
 
 | Version | Date | Changes |
 |---|---|---|
+| 0.13.1 | 2026-11-17 | §12.11 wind-shear study: predictor keeps uniform wind (no app code change) |
 | 0.13.0 | 2026-11-16 | §12.10 trained-detector pipeline; §9.4 ballistics-engine research |
 | 0.12.1 | 2026-11-16 | §12.9 search-pattern alternatives tested; none beat axis-then-lanes (no code change) |
 | 0.12.0 | 2026-11-16 | §12.8 course-map surfaces (fairway, rough, green, bunker, water) for roll and readout |
@@ -502,7 +503,7 @@ compatible with this project, with attribution if code is copied) is a large rif
 
 | Idea | Module | Value for VIGBT |
 |---|---|---|
-| **Wind shear (log-law profile)** | `wind/field.rs` `LogProfile` | High. The golfer feels wind at about 1.7 m, but a drive peaks at 25–30 m where wind is about 1.7× stronger. A 10 mph headwind costs a further 5–6 yd of carry (driver 229 → 223 yd). Planned for 0.14.0. |
+| **Wind shear (log-law profile)** | `wind/field.rs` `LogProfile` | High. The golfer feels wind at about 1.7 m, but a drive peaks at 25–30 m where wind is about 1.7× stronger. A 10 mph headwind costs a further 5–6 yd of carry (driver 229 → 223 yd). **Tested in 0.13.1 (§12.11): not shipped**, because it amplifies the golfer's wind estimate. |
 | Station atmosphere (ICAO plus humidity) | `atmosphere.rs` | Medium. The iPhone barometer (`CMAltimeter`) gives station pressure, which gives air density. A course at altitude flies noticeably further. |
 | Uncertainty-aware truing (MAP fit with priors and Laplace intervals) | `truing_uncertainty.rs` | Medium. A principled version of our learners (compass, roll, search zone), which could also report *how sure* they are. |
 | Per-input error budget ("which single input is worth improving") | `error_budget.rs` | Medium. Our ablations (§12.3) as an in-app hint, e.g. "Entering the wind would help most now." |
@@ -863,6 +864,41 @@ prediction), not a different path. The shipped pattern is unchanged.
 - **Core ML export** did not run in the Linux/Python 3.13 build environment (coremltools' native writer
   is missing there). It is expected to work on macOS, but that is unverified.
 - **Next:** train on licence-checked real images, then a field test that fills in `validatedRangeMeters`.
+
+### 12.11 Wind shear (0.13.1, study only, no app code change)
+
+**Question.** Real wind grows with height. Should the predictor scale the golfer's entered wind with a
+log-law profile (roughness z0 = 0.03 m, wind felt at 1.7 m)? At a 25–30 m apex, that profile makes the wind
+about 1.7× stronger than what the golfer feels.
+
+**How it was tested.** `tools/monte_carlo.py` has two new options:
+- `--shear-truth S`: the simulated "real" wind follows the profile.
+- `--shear-predict S`: the strength at which the predictor applies the profile.
+
+For both, `S` blends from uniform wind (0) to the full log law (1). Each row below used 30,000 shots, seed 61,
+and the realistic configuration: per-round ground, map surfaces, ground learning, golfer wind input and
+session compass. In every row the true wind is fully sheared.
+
+| Predictor profile strength | p90 error to rest | Shipped-ellipse coverage | Lateral p90 |
+|---|---|---|---|
+| 0 (uniform, shipped) | 29.3 yd | 90.2% | 10.5 yd |
+| 0.25 | 29.4 yd | 89.8% | 10.9 yd |
+| 0.5 | 29.8 yd | 88.9% | 11.5 yd |
+| 0.75 | 30.7 yd | 87.5% | 12.3 yd |
+| 1 (full log law) | 31.7 yd | 85.6% | 13.1 yd |
+
+**With perfect wind knowledge**, the profile matters. In the oracle-wind ablation with true shear, the
+p90 error is 11.6 yd with uniform wind and 5.8 yd with the full log law, which equals the no-shear baseline.
+
+**Decision.**
+- The physics is right, but the inputs aren't good enough for it. The golfer's estimate (a strength preset
+  and 8 directions) is coarse, and multiplying it by about 1.7 at the apex amplifies its error more than it
+  corrects the bias.
+- **The predictor keeps uniform wind.** Real shear costs only 0.8 yd of p90 compared with a shear-free world
+  (28.5 → 29.3 yd). The shipped search ellipse still covers 90.2% of shots.
+- **Revisit** if VIGBT ever measures wind instead of asking for it, for example from a connected anemometer
+  or a weather service at height.
+- Full report: `docs/validation/wind-shear-sweep-30k.txt`.
 
 These are model results: the physics, camera and noise figures are assumptions until they are checked
 against real recorded shots. Treat real-world capture as the next validation step.

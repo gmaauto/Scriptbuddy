@@ -1,0 +1,11 @@
+VIGBT 0.13.1 wind-shear study: 30,000 shots per row, seed 61, realistic config (round/fairway ground, map surface, ground learning, golfer wind input, session compass), true wind follows the full log law (z0 0.03 m, felt at 1.7 m).
+Rows vary only the profile strength the predictor applies to the entered wind (0 = uniform, 1 = full log law).
+
+predict 0    | Error to final rest (yd): median 9.5, p80 19.2, p90 29.3, p95 42.5 | Shipped policy coverage (ellipse 22%/14%, tight 20%/10%, low-launch 45%/12%, min 5 m): 90.2% overall | Along-line error p90 |27.7| yd, lateral p90 |10.5| yd (bias along +1.3, lateral +0.0)
+predict 0.25 | Error to final rest (yd): median 9.6, p80 19.3, p90 29.4, p95 42.6 | Shipped policy coverage (ellipse 22%/14%, tight 20%/10%, low-launch 45%/12%, min 5 m): 89.8% overall | Along-line error p90 |27.5| yd, lateral p90 |10.9| yd (bias along +1.2, lateral +0.0)
+predict 0.5  | Error to final rest (yd): median 9.9, p80 19.8, p90 29.8, p95 43.1 | Shipped policy coverage (ellipse 22%/14%, tight 20%/10%, low-launch 45%/12%, min 5 m): 88.9% overall | Along-line error p90 |27.9| yd, lateral p90 |11.5| yd (bias along +1.3, lateral +0.1)
+predict 0.75 | Error to final rest (yd): median 10.3, p80 20.5, p90 30.7, p95 43.9 | Shipped policy coverage (ellipse 22%/14%, tight 20%/10%, low-launch 45%/12%, min 5 m): 87.5% overall | Along-line error p90 |28.5| yd, lateral p90 |12.3| yd (bias along +1.4, lateral +0.1)
+predict 1    | Error to final rest (yd): median 10.8, p80 21.5, p90 31.7, p95 45.0 | Shipped policy coverage (ellipse 22%/14%, tight 20%/10%, low-launch 45%/12%, min 5 m): 85.6% overall | Along-line error p90 |29.4| yd, lateral p90 |13.1| yd (bias along +1.5, lateral +0.0)
+
+Oracle wind, everything else ideal (5,000 shots, seed 53), true wind sheared: predictor uniform p90 11.6 yd; predictor full log law p90 5.8 yd; no shear anywhere p90 5.8 yd.
+Conclusion: the profile is physically right but amplifies the golfer's coarse wind estimate by ~1.7x at apex height; with entered wind every strength > 0 is worse. Predictor ships uniform wind (strength 0).
