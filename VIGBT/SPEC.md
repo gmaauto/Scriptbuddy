@@ -1,9 +1,10 @@
 # Vision Impaired Golf Ball Tracker (VIGBT) — Master Technical & Commercial Specification
 
-Document version: 0.13.3 · Updated 2026-11-17 · Status: draft (not yet compiled or tested on a device)
+Document version: 0.14.0 · Updated 2026-11-19 · Status: draft (not yet compiled or tested on a device)
 
 | Version | Date | Changes |
 |---|---|---|
+| 0.14.0 | 2026-11-19 | §12.8 water: warning spoken first, "Drop a ball" replaces walking guidance (replay review) |
 | 0.13.3 | 2026-11-17 | Walk screen approved (re-review); replay mockup shows the full spoken readout |
 | 0.13.2 | 2026-11-17 | Walk screen says "yards to the search zone" on screen and in speech, matching the reviewed design |
 | 0.13.1 | 2026-11-17 | §12.11 wind-shear study: predictor keeps uniform wind (no app code change) |
@@ -795,8 +796,16 @@ of the learned firmness:
 | Bunker | Almost no bounce or roll |
 | Water | No roll |
 
-The readout and stats name the surface, for example "It should land in the rough." or "It may have gone
-in the water." On an unmapped hole, behaviour is unchanged.
+The readout and stats name the surface, for example "It should land in the rough." On an unmapped hole,
+behaviour is unchanged.
+
+**Water (0.14.0, from the replay-screen review).** Water changes what the golfer should do next, and walking
+towards water is unsafe for someone who cannot see it. So when the ball is predicted to land in water:
+- the readout **starts** with "Water. The ball may have gone in the water. Do not walk to it. You can take a
+  drop.", before the launch numbers, and the phone gives a warning haptic, which is distinct from the success tap;
+- **"Drop a ball" replaces "Walk to ball"**. It records the drop on the shot (`ShotRecord.droppedFromWater`,
+  an optional field, so `shots.json` stays format 3), speaks the drop instructions (with a playing partner,
+  no nearer the hole than where the ball crossed into the water), and starts camera setup at the drop spot.
 
 Results, 1,000,000 shots each (wind entered, self-correcting compass, roll learning, fairway-width rough;
 reports in `docs/validation/`):

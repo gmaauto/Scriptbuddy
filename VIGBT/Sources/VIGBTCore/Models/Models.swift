@@ -389,6 +389,11 @@ public struct ShotRecord: Codable, Identifiable, Equatable, Sendable {
     public var holeNumber: Int?
     /// Where the ball was actually found (Phase 4 lock position). Ground truth for `SearchZoneModel`.
     public var foundLocation: GeoCoordinate?
+    /// The golfer took a penalty drop because the ball was predicted to land in water (0.14.0).
+    public var droppedFromWater: Bool?
+
+    /// Predicted to land in water: the app offers a drop instead of walking guidance.
+    public var landsInWater: Bool { landing?.landingSurface == .water }
 
     public init(id: UUID = UUID(), capturedAt: Date = Date(), ballProfile: BallColorProfile,
                 calibration: TeeCalibration, centroids: [TrackedCentroid] = [],

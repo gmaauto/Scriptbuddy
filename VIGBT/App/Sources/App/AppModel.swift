@@ -330,13 +330,13 @@ final class AppModel {
         phase = .replay
         var text = shot.isSimulated == true ? "Simulated shot. " : ""
         if let launch = shot.launch {
-            text += Readout.launch(launch)
-            if let landing = shot.landing { text += " " + Readout.landing(landing) }
-            else if !gate.isEnabled(.ballisticEstimation) { text += " Unlock Pro to estimate where the ball landed." }
+            text += Readout.shotSummary(launch: launch, landing: shot.landing)
+            if shot.landing == nil, !gate.isEnabled(.ballisticEstimation) { text += " Unlock Pro to estimate where the ball landed." }
         } else {
             text += a?.failureReason ?? "The shot could not be measured."
         }
         statusMessage = text
+        if shot.landsInWater { haptics.warn() }
         speak(text)
     }
 
@@ -374,7 +374,21 @@ final class AppModel {
 
     // MARK: Walk to ball (Phase 3)
 
-    var canWalk: Bool { currentShot?.landing != nil }
+    /// Walking guidance is not offered when the ball is predicted to be in water; the golfer gets "Drop a ball".
+    var canWalk: Bool { currentShot?.landing != nil && currentShot?.landsInWater != true }
+    var canDrop: Bool { currentShot?.landsInWater == true }
+
+    /// Records a penalty drop for a ball predicted in water, then starts setup at the drop spot.
+    func dropBall() {
+        if var shot = currentShot, shot.isSimulated != true {
+            shot.droppedFromWater = true
+            store.update(shot)
+            currentShot = shot
+        }
+        // Spoken first; setup's own prompt queues after it.
+        speak(Readout.dropInstructions, interrupt: true)
+        beginCalibration()
+    }
 
     func startWalk() {
         guard gate.isEnabled(.walkToBallNavigation) else {

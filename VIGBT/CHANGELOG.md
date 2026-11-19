@@ -6,6 +6,25 @@ All notable changes to VIGBT are recorded here. The format follows
 
 Versions before 1.0.0 are development builds that have not yet been compiled or tested on a device.
 
+## [0.14.0] - 2026-11-19
+
+### Added
+- Water handling, decided in the replay-screen review (options a and c; SPEC §12.8):
+  - when the ball is predicted in water, the readout starts with a water warning before the numbers, with a warning haptic (`Readout.shotSummary`, `Readout.waterWarning`);
+  - "Drop a ball" replaces "Walk to ball": it records `ShotRecord.droppedFromWater`, speaks drop instructions and starts setup at the drop spot. Walking guidance is never offered towards water.
+- `vigbt-montecarlo`: `--ground-per-round` and `--roll-learning` options.
+
+### Fixed
+- The Swift package did not compile:
+  - `HoleGeometry` read `.e`/`.n` from `enuOffset`, which returns `east`/`north`;
+  - a lift expression in `BallisticSolver` failed type-checking;
+  - `MonteCarloTests` called a helper named `run()`, which clashed with `XCTestCase.run()`.
+  - All 114 tests now pass on Linux (Swift 6.0.3). The iOS app target still needs a macOS build.
+- The roll-learning test used 300 shots (10 rounds), and p90 noise of about 1 yd hid the gain. It now uses 1,200 shots. At 3,000 shots, learning lowers p90 by 1–2 yd on each of three seeds.
+
+### Design
+- Replay screen approved with changes: keep the surface sentence; announce water first; replace walking with "Drop a ball" (`design/approvals.md`).
+
 ## [0.13.3] - 2026-11-17
 
 ### Design

@@ -188,6 +188,11 @@ final class HapticsService {
         notifier.notificationOccurred(.success)
     }
 
+    /// Distinct from the success tap: used when the ball is predicted to land in water.
+    func warn() {
+        notifier.notificationOccurred(.warning)
+    }
+
     private func tick(_ gen: Int) {
         guard ticking, gen == generation else { return }
         play([transient(at: 0, intensity: tickIntensity, sharpness: 0.9)])

@@ -191,7 +191,8 @@ public struct BallisticSolver: Sendable {
         let cl = min(m.clMax, m.cl0 + m.clSpin * s)
         let k = 0.5 * m.airDensity * m.crossSectionArea * speed / m.ballMassKg
         let drag = vRel * (-k * cd)
-        let lift = axis.cross(vRel) * (k * cl)
+        let liftDir: Vector3 = axis.cross(vRel)
+        let lift = liftDir * (k * cl)
         return gravity + drag + lift
     }
 

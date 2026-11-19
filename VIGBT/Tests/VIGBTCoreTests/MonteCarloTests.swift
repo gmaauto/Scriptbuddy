@@ -4,7 +4,7 @@ import XCTest
 /// CI-sized slice of the Monte Carlo validation (SPEC §12). Bounds are deliberately looser than the
 /// million-shot results (median 14.3 yd, p90 37.5 yd, ellipse coverage 84.6%) to tolerate a small sample.
 final class MonteCarloTests: XCTestCase {
-    private func run(shots: Int = 400, fit: Bool = true) -> MonteCarloReport {
+    private func simulate(shots: Int = 400, fit: Bool = true) -> MonteCarloReport {
         var c = MonteCarloConfig()
         c.shots = shots
         c.seed = 42
@@ -13,7 +13,7 @@ final class MonteCarloTests: XCTestCase {
     }
 
     func testPipelineMeetsAccuracyTargets() {
-        let r = run()
+        let r = simulate()
         print(r.summary)
         XCTAssertGreaterThan(r.trackedFraction, 0.95)
         XCTAssertGreaterThan(r.medianFramesFollowed, 15, "camera should follow the ball for well over 0.1 s")
@@ -26,14 +26,14 @@ final class MonteCarloTests: XCTestCase {
     }
 
     func testReprojectionFitBeatsPerFrameDepth() {
-        let fitted = run(shots: 250, fit: true)
-        let legacy = run(shots: 250, fit: false)
+        let fitted = simulate(shots: 250, fit: true)
+        let legacy = simulate(shots: 250, fit: false)
         XCTAssertLessThan(fitted.speedErrorP90Mph, legacy.speedErrorP90Mph)
         XCTAssertLessThan(fitted.p90ErrorYards, legacy.p90ErrorYards)
     }
 
     func testReproducibleForAGivenSeed() {
-        XCTAssertEqual(run(shots: 50).errorsYards, run(shots: 50).errorsYards)
+        XCTAssertEqual(simulate(shots: 50).errorsYards, simulate(shots: 50).errorsYards)
     }
 
     func testRollCarriesBallPastLanding() {
@@ -204,7 +204,9 @@ final class RollLearnerTests: XCTestCase {
 
     func testRollLearningHelpsWhenGroundIsSharedByARound() {
         var base = MonteCarloConfig()
-        base.shots = 300
+        // 40 rounds: at 300 shots (10 rounds) p90 noise of about 1 yd hid the gain; 3,000 shots on three seeds
+        // show learning lowers p90 by 1-2 yd.
+        base.shots = 1200
         base.seed = 21
         base.groundPerRound = true
         var learned = base

@@ -174,7 +174,7 @@ public enum Readout {
         let side = abs(lateral) < 2 ? "on line" : "\(whole(abs(lateral))) yards \(lateral > 0 ? "right" : "left")"
         var text = "Estimated carry \(whole(carry)) yards."
         switch l.landingSurface {
-        case .water?: text += " It may have gone in the water."
+        case .water?: break // announced first, by `shotSummary`
         case let s? where s != .fairway: text += " It should land \(s.phrase)."
         default: break
         }
@@ -190,6 +190,22 @@ public enum Readout {
         }
         return text
     }
+
+    /// Spoken first when the ball is predicted to land in water (screen review 0.14.0): it changes what the
+    /// golfer should do next, and walking towards water is unsafe for someone who cannot see it.
+    public static let waterWarning = "Water. The ball may have gone in the water. Do not walk to it. You can take a drop."
+
+    /// The full spoken and on-screen summary of a measured shot. Water, when predicted, comes first.
+    public static func shotSummary(launch l: LaunchVector, landing: LandingEstimate?) -> String {
+        var parts: [String] = []
+        if landing?.landingSurface == .water { parts.append(waterWarning) }
+        parts.append(launch(l))
+        if let landing { parts.append(self.landing(landing)) }
+        return parts.joined(separator: " ")
+    }
+
+    /// Spoken after "Drop a ball".
+    public static let dropInstructions = "Penalty stroke recorded. With your playing partner, drop a ball no nearer the hole than where it crossed into the water. Then set up the camera at the new spot."
 
     /// Compact on-screen form, e.g. "152 yd".
     public static func distanceShort(meters: Double) -> String {

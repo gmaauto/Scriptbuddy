@@ -62,7 +62,8 @@ public struct HoleGeometry: Sendable {
     /// Projects a coordinate onto the playing line. The first and last segments are extended so points
     /// behind the tee or past the green get negative / beyond-length `along` values.
     public func project(_ c: GeoCoordinate) -> (along: Double, lateral: Double) {
-        let p = GeoMath.enuOffset(of: c, from: origin)
+        let o = GeoMath.enuOffset(of: c, from: origin)
+        let p = (e: o.east, n: o.north)
         var best: (dist: Double, along: Double, lateral: Double)?
         let last = points.count - 2
         for i in 0...last {
@@ -127,7 +128,8 @@ public struct HoleGeometry: Sendable {
 
     /// Converts a coordinate to layout-space meters: x right, y toward the green, origin at the line start.
     public func layoutPoint(_ c: GeoCoordinate) -> (x: Double, y: Double) {
-        let p = GeoMath.enuOffset(of: c, from: origin)
+        let o = GeoMath.enuOffset(of: c, from: origin)
+        let p = (e: o.east, n: o.north)
         let r = Units.radians(bearingDeg)
         // Rotate so the hole bearing points up (+y).
         return (p.e * cos(r) - p.n * sin(r), p.e * sin(r) + p.n * cos(r))

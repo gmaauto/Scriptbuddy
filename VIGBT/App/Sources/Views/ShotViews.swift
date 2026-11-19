@@ -40,7 +40,12 @@ struct ReplayView: View {
             if let shot = model.currentShot, let launch = shot.launch {
                 StatsList(launch: launch, landing: shot.landing)
             }
-            if model.canWalk {
+            if model.canDrop {
+                // Water: never send the golfer walking towards it (screen review 0.14.0).
+                BigButton(title: "Drop a ball", hint: "Records a penalty stroke and sets up the camera at the drop") {
+                    model.dropBall()
+                }
+            } else if model.canWalk {
                 BigButton(title: "Walk to ball", hint: "Starts audio guidance to the landing zone") { model.startWalk() }
             } else if model.currentShot?.launch != nil, model.storeService.tier == .free {
                 BigButton(title: "Unlock landing zone", hint: "Opens the Pro upgrade") { model.showPaywall = true }

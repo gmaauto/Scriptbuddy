@@ -360,6 +360,26 @@ final class SurfaceMapTests: XCTestCase {
         let wet = e.estimate(launch: launch, calibration: cal, surfaceMap: SurfaceMap(water: [strip(0, 400, 20)])).landing
         XCTAssertEqual(wet.landingSurface, .water)
         XCTAssertLessThan(wet.rollMeters, 0.5)
-        XCTAssertTrue(Readout.landing(wet).contains("may have gone in the water"))
+        // Water is announced first, before the numbers, and not repeated in the landing sentence.
+        let summary = Readout.shotSummary(launch: launch, landing: wet)
+        XCTAssertTrue(summary.hasPrefix(Readout.waterWarning))
+        XCTAssertEqual(summary.components(separatedBy: "in the water").count, 2, "said once")
+        XCTAssertFalse(Readout.shotSummary(launch: launch, landing: inRough).contains("water"))
+        XCTAssertTrue(Readout.shotSummary(launch: launch, landing: inRough).hasPrefix(Readout.launch(launch)))
+    }
+
+    func testWaterShotOffersDropNotWalk() throws {
+        let cal = TeeCalibration(distanceToTeeMeters: 3, cameraPitchRadians: 0, cameraHeadingDeg: 0,
+                                 horizontalFOVRadians: 1.9, teeLocation: tee)
+        let launch = LaunchVector(ballSpeed: 65, launchAngleDeg: 11, azimuthDeg: 0)
+        let wet = LandingZoneEstimator().estimate(launch: launch, calibration: cal,
+                                                  surfaceMap: SurfaceMap(water: [strip(0, 400, 20)])).landing
+        var shot = ShotRecord(ballProfile: .neonOrange, calibration: cal, launch: launch, landing: wet)
+        XCTAssertTrue(shot.landsInWater)
+        shot.droppedFromWater = true
+        // The new optional field round-trips, and files without it still decode.
+        let data = try DataFormat.encode([shot], format: DataFormat.shots)
+        let back = try DataFormat.decode([ShotRecord].self, from: data, supported: DataFormat.shots)
+        XCTAssertEqual(back.first?.droppedFromWater, true)
     }
 }
