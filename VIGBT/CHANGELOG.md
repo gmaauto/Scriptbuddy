@@ -6,6 +6,14 @@ All notable changes to VIGBT are recorded here. The format follows
 
 Versions before 1.0.0 are development builds that have not yet been compiled or tested on a device.
 
+## [0.15.1] - 2026-11-19
+
+### Fixed
+- CI (`.github/workflows/vigbt.yml`). The macOS and iPhone-app jobs never ran: they were cancelled before a runner started, apparently because the `macos-14` image is no longer available. They now use `macos-15` (Xcode 16).
+  - The iPhone app is built on every push for both the Simulator and a device, unsigned. Errors are listed in the job log, and full logs are kept as the `ios-build-logs` artifact.
+  - The Linux job now uses Swift 6.0, the toolchain the tests were run with here.
+  - Other changes: manual runs, cancelling superseded runs, and job timeouts.
+
 ## [0.15.0] - 2026-11-19
 
 ### Added

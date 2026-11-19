@@ -1,21 +1,33 @@
-name: VIGBT Core
+name: VIGBT CI
 
+# Runs on every push or pull request that touches VIGBT, and on demand (Actions tab → VIGBT CI → Run workflow).
+# The repository is public, so GitHub-hosted Linux and macOS runners are free.
 on:
   push:
     paths: ["VIGBT/**", ".github/workflows/vigbt.yml"]
   pull_request:
     paths: ["VIGBT/**", ".github/workflows/vigbt.yml"]
+  workflow_dispatch:
+
+# A newer push to the same branch cancels the older run.
+concurrency:
+  group: vigbt-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   version:
+    name: Version numbers agree
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
       - run: VIGBT/tools/check_version.sh
 
   linux:
+    name: Core tests (Linux) + Monte Carlo
     runs-on: ubuntu-latest
-    container: swift:5.10
+    timeout-minutes: 30
+    container: swift:6.0
     defaults:
       run:
         working-directory: VIGBT
@@ -27,26 +39,54 @@ jobs:
         run: swift run -c release vigbt-montecarlo --shots 200000 --seed 2026
 
   macos:
-    runs-on: macos-14
+    name: Core tests (macOS)
+    runs-on: macos-15
+    timeout-minutes: 30
     defaults:
       run:
         working-directory: VIGBT
     steps:
       - uses: actions/checkout@v4
+      - run: xcodebuild -version && swift --version
       - run: swift test
 
   ios-app:
-    runs-on: macos-14
+    name: iPhone app builds
+    runs-on: macos-15
+    timeout-minutes: 45
     defaults:
       run:
         working-directory: VIGBT/App
     steps:
       - uses: actions/checkout@v4
+      - run: xcodebuild -version
       - run: brew install xcodegen
       - run: xcodegen generate
-      - name: Build for device (unsigned)
+      # The full log goes to an artifact; the job log shows only errors and the result, so problems are easy to find.
+      - name: Build for the iOS Simulator
         run: |
+          set +e
+          xcodebuild -project VIGBT.xcodeproj -scheme VIGBT \
+            -destination 'generic/platform=iOS Simulator' \
+            CODE_SIGNING_ALLOWED=NO build > simulator-build.log 2>&1
+          status=$?
+          grep -E "error:|warning: .*VIGBT/App" simulator-build.log | sort -u | head -200
+          tail -3 simulator-build.log
+          exit $status
+      - name: Build for iPhone (unsigned)
+        run: |
+          set +e
           xcodebuild -project VIGBT.xcodeproj -scheme VIGBT \
             -destination 'generic/platform=iOS' \
-            CODE_SIGNING_ALLOWED=NO build | tail -50
-          exit ${PIPESTATUS[0]}
+            CODE_SIGNING_ALLOWED=NO build > device-build.log 2>&1
+          status=$?
+          grep -E "error:" device-build.log | sort -u | head -200
+          tail -3 device-build.log
+          exit $status
+      - name: Keep build logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-build-logs
+          path: VIGBT/App/*-build.log
+          if-no-files-found: ignore
