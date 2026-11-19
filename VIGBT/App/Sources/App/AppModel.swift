@@ -353,14 +353,12 @@ final class AppModel {
                                                           rollMultiplier: roll, surfaceMap: surfaces)
                 }.value
                 let a = out.analysis
-                let shot = ShotRecord(ballProfile: profile, calibration: cal, centroids: a.centroids,
+                var shot = ShotRecord(ballProfile: profile, calibration: cal, centroids: a.centroids,
                                       launch: a.launch, spin: a.spin, trajectory: a.trajectory,
                                       landing: a.landing, clipFileName: clip.url.lastPathComponent, club: club,
                                       clipImpactTime: clip.impactTime, clipFrameRate: clip.frameRate,
                                       bagClub: bagClub, holeNumber: round.state?.currentHole)
-                var withTempo = shot
-                withTempo.swingTempo = swingTempo(forStrikeAt: strikeTime)
-                let shot = withTempo
+                shot.swingTempo = swingTempo(forStrikeAt: strikeTime)
                 store.add(shot)
                 round.record(shot: shot)
                 round.learn(from: store.shots)

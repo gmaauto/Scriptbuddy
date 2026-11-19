@@ -25,8 +25,8 @@ targets:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.vigbt.app
         PRODUCT_NAME: VIGBT
-        MARKETING_VERSION: "0.15.1"
-        CURRENT_PROJECT_VERSION: "22"
+        MARKETING_VERSION: "0.15.2"
+        CURRENT_PROJECT_VERSION: "23"
         SWIFT_VERSION: "5.9"
         TARGETED_DEVICE_FAMILY: "1"
         INFOPLIST_KEY_CFBundleDisplayName: VIGBT

@@ -1,9 +1,10 @@
 # Vision Impaired Golf Ball Tracker (VIGBT) — Master Technical & Commercial Specification
 
-Document version: 0.15.1 · Updated 2026-11-19 · Status: draft (not yet compiled or tested on a device)
+Document version: 0.15.2 · Updated 2026-11-19 · Status: draft (not yet compiled or tested on a device)
 
 | Version | Date | Changes |
 |---|---|---|
+| 0.15.2 | 2026-11-19 | iPhone app build fix found by the first CI build |
 | 0.15.1 | 2026-11-19 | CI: macOS jobs moved to macos-15 so the iPhone app is built on every push |
 | 0.15.0 | 2026-11-19 | §9.5 Golf-swing-analyzer review; swing check: strike matched to the golfer's swing, practice swings, relative tempo |
 | 0.14.1 | 2026-11-19 | Homing screen approved on re-review; all 16 screens approved |

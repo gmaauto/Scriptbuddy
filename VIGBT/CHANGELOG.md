@@ -6,6 +6,11 @@ All notable changes to VIGBT are recorded here. The format follows
 
 Versions before 1.0.0 are development builds that have not yet been compiled or tested on a device.
 
+## [0.15.2] - 2026-11-19
+
+### Fixed
+- iPhone app build error found by the first CI build (Xcode 16.4): `AppModel` declared `shot` twice when it attached the swing tempo.
+
 ## [0.15.1] - 2026-11-19
 
 ### Fixed
