@@ -204,6 +204,16 @@ public enum Readout {
         return parts.joined(separator: " ")
     }
 
+    /// Spoken tempo feedback; nil while the app is still learning the golfer's usual tempo.
+    public static func tempo(_ f: TempoCoach.Feedback) -> String? {
+        switch f {
+        case .learning: return nil
+        case .steady: return "Tempo steady."
+        case .quicker: return "Tempo quicker than your usual."
+        case .slower: return "Tempo slower than your usual."
+        }
+    }
+
     /// Spoken after "Drop a ball".
     public static let dropInstructions = "Penalty stroke recorded. With your playing partner, drop a ball no nearer the hole than where it crossed into the water. Then set up the camera at the new spot."
 

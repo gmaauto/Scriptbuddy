@@ -1,9 +1,10 @@
 # Vision Impaired Golf Ball Tracker (VIGBT) — Master Technical & Commercial Specification
 
-Document version: 0.14.1 · Updated 2026-11-19 · Status: draft (not yet compiled or tested on a device)
+Document version: 0.15.0 · Updated 2026-11-19 · Status: draft (not yet compiled or tested on a device)
 
 | Version | Date | Changes |
 |---|---|---|
+| 0.15.0 | 2026-11-19 | §9.5 Golf-swing-analyzer review; swing check: strike matched to the golfer's swing, practice swings, relative tempo |
 | 0.14.1 | 2026-11-19 | Homing screen approved on re-review; all 16 screens approved |
 | 0.14.0 | 2026-11-19 | §12.8 water: warning spoken first, "Drop a ball" replaces walking guidance (replay review) |
 | 0.13.3 | 2026-11-17 | Walk screen approved (re-review); replay mockup shows the full spoken readout |
@@ -538,6 +539,64 @@ bullet ballistic-coefficient tables, transonic drag.
    ticks on the wrist so the phone can stay pointed at the ground.
 7. **Practice-range mode** (from Toptracer clinics). Capture and readouts only, with no walk or homing, for
    lessons and warm-ups.
+
+### 9.5 Golf-swing-analyzer (YiHongLim), reviewed 0.15.0
+
+**What it is.** A small browser app: MediaPipe pose on a webcam or video file, swing phases from wrist height
+relative to the hips, spine angle, hip rotation, a left/right balance bar, GOOD/FIX badges against fixed
+thresholds, and coaching tips from OpenAI's GPT-4o-mini through a local Express proxy. It has no tests. The
+README says MIT, but the repository has no licence file, so we take ideas only and copy no code.
+
+| Idea | Decision for VIGBT |
+|---|---|
+| Swing phases from wrist height relative to the hips | **Taken (0.15.0)**, made independent of the view and of distance by measuring in torso lengths. It drives the two features below. |
+| Pose on the same camera that films the shot | **Taken**, with Apple Vision (`VNDetectHumanBodyPoseRequest`) on the phone at about 30 frames a second. No MediaPipe and no browser. |
+| Spine angle, hip rotation, balance with GOOD/FIX badges | **Not taken.** A single 2D spine angle means different things face-on and down the line, and the thresholds (15–50°, ≥ 20°, 35–65%) are not validated. Spoken pass/fail coaching on unvalidated numbers would mislead. |
+| AI coaching tips (OpenAI) | **Not taken.** It sends swing data to a cloud service, needs an API key, and isn't open source (§8). |
+| Record and frame-by-frame replay | Already in VIGBT (slow-motion replay with tracer). |
+
+**What VIGBT built from it (0.15.0).** `SwingTracker`, `StrikeGate` and `TempoCoach` are in VIGBTCore, and
+`PoseService` is in the app. They provide:
+
+1. **Strike check.** The strike sound is matched to the golfer's own swing, using the moment the hands
+   return to the ball (the lowest hand point after the top).
+   - A sound is **rejected only if** the golfer was in full view for at least 90% of at least 12 pose
+     frames around it, and the hands stayed at address the whole time. That is someone else's strike,
+     for example on a driving range.
+   - In every other case the shot is kept: the golfer isn't visible, the pose is too slow, or the result is
+     unclear. A lost real shot loses the ball, while a stray capture only costs a re-arm.
+   - Test Strike always counts.
+2. **Practice swings.** A full swing with no strike sound is announced as a practice swing, and the app
+   stays ready.
+3. **Tempo, relative to the golfer's own swings.** Tempo is backswing time divided by downswing time.
+   - From 2D pose the first centimetres of the takeaway are invisible, so the absolute ratio reads low
+     (about 2.2 for a true 3.0). VIGBT therefore doesn't announce "3 to 1".
+   - Instead it compares each swing with the median of the golfer's last 10 swings and says "Tempo steady",
+     "quicker than your usual" or "slower than your usual" when the change is more than 10%.
+   - The tempo is saved on the shot (`ShotRecord.swingTempo`).
+
+**Simulation** (`SwingTrackerTests`, synthetic swings, pose noise ±0.03 torso lengths, half at 30 and half at
+15 pose frames per second):
+
+| Check | Result |
+|---|---|
+| Swings detected | 2,000 of 2,000 |
+| Real strikes rejected | 0 of 2,000 |
+| Neighbour's strike while the golfer is still at address | 2,000 of 2,000 rejected |
+| Impact timing, p99 | 37 ms (gate window −350 / +300 ms) |
+| Tempo repeatability (same swing, new noise) | 2–5% at 30 fps, under 7.5% at 15 fps |
+| 20% quicker swing flagged | 259 of 300 (86%) |
+| Same-tempo swing wrongly flagged | 9 of 300 (3%) |
+
+**Tuning that the simulation drove:**
+- a 3-frame median for stillness, because frame-to-frame jitter had looked like movement;
+- impact taken as the lowest hand point, refined between frames, because at 30 fps the hands cross the
+  bottom between frames;
+- a parabola fit for the top of the swing, chosen as the most repeatable of three tested bands.
+
+**Limits.** These are synthetic swings. Real pose noise, loose clothing, a second person in view and camera
+placement are untested. The strike check is built to fail safe, by keeping the shot. A field test should
+measure how often it actually sees the golfer.
 
 ## 10. Versioning
 

@@ -6,6 +6,23 @@ All notable changes to VIGBT are recorded here. The format follows
 
 Versions before 1.0.0 are development builds that have not yet been compiled or tested on a device.
 
+## [0.15.0] - 2026-11-19
+
+### Added
+- Swing check from on-device body pose, with ideas from a review of Golf-swing-analyzer; no code copied (SPEC §9.5):
+  - `SwingTracker` follows swing phases from hand height in torso lengths, so it works face-on, down the line and at any distance;
+  - `StrikeGate` ignores a strike sound only when the golfer was clearly in view and still at address (another player's shot). Otherwise it keeps the shot, and Test Strike always counts;
+  - practice swings are announced, and the app stays ready;
+  - `TempoCoach` compares tempo with the golfer's own last 10 swings ("Tempo steady", "quicker/slower than your usual"). It doesn't announce an absolute ratio, because 2D pose can't time the start of the takeaway exactly;
+  - app: `PoseService` (Apple Vision, about 30 poses a second, nothing leaves the phone), a swing-check line on the Ready screen, and `ShotRecord.swingTempo`.
+- Simulation on 2,000 synthetic swings:
+  - every swing detected, no real strikes rejected, every still-at-address stray strike rejected;
+  - impact timed within 37 ms for 99% of swings;
+  - a 20% tempo change flagged 86% of the time, with 3% false flags.
+
+### Not taken
+- GOOD/FIX posture badges on unvalidated thresholds, and OpenAI coaching tips (a cloud service, not open source).
+
 ## [0.14.1] - 2026-11-19
 
 ### Design

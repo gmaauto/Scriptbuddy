@@ -40,8 +40,14 @@ enum CaptureError: LocalizedError {
 final class CaptureService: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, @unchecked Sendable {
     let session = AVCaptureSession()
 
-    /// Called on the main queue when the strike is detected (or Test Strike pressed).
-    var onImpact: (@MainActor () -> Void)?
+    /// Called on the main queue when the strike is detected (or Test Strike pressed), with the strike's
+    /// host-clock time and whether it was the manual Test Strike.
+    var onImpact: (@MainActor (_ hostTime: Double, _ manual: Bool) -> Void)?
+    /// Every `poseFrameStride`-th video frame (about 30 per second at 120 fps), for swing detection (§9.5).
+    /// Called on the video queue; the receiver must return quickly.
+    var onPoseFrame: ((CVPixelBuffer, Double) -> Void)?
+    var poseFrameStride = 4
+    private var poseFrameCounter = 0
     /// Called on the main queue when the clip is exported (or failed).
     var onClip: (@MainActor (Result<CapturedClip, Error>) -> Void)?
 
@@ -183,7 +189,7 @@ final class CaptureService: NSObject, AVCaptureVideoDataOutputSampleBufferDelega
 
     /// Manual "Test Strike" for dry runs.
     func testStrike() {
-        trigger(at: CACurrentMediaTime())
+        trigger(at: CACurrentMediaTime(), manual: true)
     }
 
     private func applyFastShutter(targetSeconds: Double = 1.0 / 2000) {
@@ -242,12 +248,12 @@ final class CaptureService: NSObject, AVCaptureVideoDataOutputSampleBufferDelega
         }
     }
 
-    private func trigger(at hostSeconds: Double) {
+    private func trigger(at hostSeconds: Double, manual: Bool = false) {
         videoQueue.async {
             guard self.pendingImpact == nil else { return }
             self.pendingImpact = hostSeconds
             self.stopAt = self.clipWindow.captureStopTime(impactTime: hostSeconds)
-            Task { @MainActor in self.onImpact?() }
+            Task { @MainActor in self.onImpact?(hostSeconds, manual) }
         }
     }
 
@@ -264,6 +270,11 @@ final class CaptureService: NSObject, AVCaptureVideoDataOutputSampleBufferDelega
             rotate()
         }
         current?.append(sampleBuffer)
+        poseFrameCounter += 1
+        if let onPose = onPoseFrame, poseFrameCounter % max(1, poseFrameStride) == 0,
+           let pixels = CMSampleBufferGetImageBuffer(sampleBuffer) {
+            onPose(pixels, t)
+        }
         if let stop = stopAt, t >= stop {
             finishClip()
         }

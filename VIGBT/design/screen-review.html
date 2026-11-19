@@ -121,7 +121,7 @@ textarea { width: 100%; min-height: 84px; font: inherit; color: var(--fg); backg
 
 <div class="wrap">
   <header class="intro">
-    <span class="eyebrow">VIGBT 0.14.1 · iOS app · design review</span>
+    <span class="eyebrow">VIGBT 0.15.0 · iOS app · design review</span>
     <h1>Approve each screen</h1>
     <p>These mock-ups follow the SwiftUI code and use the app's own tested colour palettes. Switch the app theme and text size to check them the way low-vision golfers will see them. Approve a screen or request changes with a comment. Your decisions are saved here, and Claude reads them to make the changes.</p>
     <p class="example">Distances, course names and shot numbers on these screens are examples.</p>
@@ -160,7 +160,7 @@ textarea { width: 100%; min-height: 84px; font: inherit; color: var(--fg); backg
 </div>
 
 <script>
-const VERSION = "0.14.1";
+const VERSION = "0.15.0";
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 
 // ---------- shared mock pieces ----------
@@ -231,11 +231,13 @@ const SCREENS = [
       ${btn("Sample ball colour", false)}${btn("Start")}
       <div class="a-head">Compass corrected by 2°.</div>${cbtn("Sight the flag to correct the compass")}
       ${astack(cbtn("Change course"), cbtn("End round"))}${astack(cbtn("Wind: moderate (10 mph)"), cbtn("Simulated shot"))}${astack(cbtn("Shot history"), cbtn("Settings"))}</div>` },
-  { id: "ready", name: "Ready (listening for the strike)", file: "ArmedView",
+  { id: "ready", name: "Ready (listening for the strike)", file: "ArmedView", changedIn: "0.15.0",
+    change: "New swing-check line: says whether the camera can see you. When it can, strike sounds that are not your swing are ignored, and a practice swing gets tempo feedback (\"Practice swing. Tempo steady.\").",
     why: "Camera running at 120 fps, waiting for the sound of the strike.",
-    checks: ["Is the club picker easy to change?", "Should Test Strike be less prominent?"],
+    checks: ["Is the swing-check line clear?", "Should practice swings be announced, or stay silent?"],
     body: () => `${holeHeader()}<div class="scroll">${title("Ready")}${teeCam()}
       <div class="a-t2 a-center" style="font-weight:400">Listening for the strike. Take your shot.</div>
+      <div class="a-t3 a-center" style="font-weight:700">Swing check: I can see you.</div>
       <div class="a-head a-center">2 free shots left today</div>
       ${astack(cbtn("Club: 7-iron ▾"), cbtn("My bag"))}${cbtn("Wind: moderate (10 mph)")}
       ${btn("Test Strike", false)}${btn("Recalibrate", false)}${astack(cbtn("Simulated shot"), cbtn("Shot history"), cbtn("Settings"))}</div>` },

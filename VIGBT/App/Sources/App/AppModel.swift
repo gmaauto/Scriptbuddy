@@ -71,6 +71,14 @@ final class AppModel {
     @ObservationIgnored private let speech = SpeechService()
     @ObservationIgnored private let beacon = AudioBeaconService()
     @ObservationIgnored private let haptics = HapticsService()
+    @ObservationIgnored private let pose = PoseService()
+    /// Swing detection from body pose (SPEC §9.5).
+    @ObservationIgnored private var swingTracker = SwingTracker()
+    @ObservationIgnored private var tempoCoach = TempoCoach()
+    @ObservationIgnored private let strikeGate = StrikeGate()
+    @ObservationIgnored private var lastStrike: (time: Double, manual: Bool)?
+    /// Shown on the Ready screen: whether the camera can see the golfer for the swing check.
+    private(set) var swingCheckStatus = "Swing check: looking for you."
     @ObservationIgnored private var navigation: NavigationEngine?
     /// Guided search inside the search ellipse (SPEC §12.7) and the beacon target for its current leg.
     @ObservationIgnored private var searchGuide: SearchGuide?
@@ -95,6 +103,8 @@ final class AppModel {
         theme = s.theme
         ballHighlightEnabled = s.ballHighlightEnabled
         wireCallbacks()
+        // Tempo is compared with the golfer's own recent swings, including earlier sessions.
+        for t in s.shots.compactMap(\.swingTempo).suffix(tempoCoach.keep) { _ = tempoCoach.record(t) }
         scanner.highlightEnabled = ballHighlightEnabled
         if !s.lockedFiles.isEmpty {
             errorMessage = "Some of your data was saved by a newer version of VIGBT. It has been kept safe and unchanged. Please update the app to see it."
@@ -258,6 +268,8 @@ final class AppModel {
         }
         phase = .armed
         statusMessage = "Ready"
+        lastStrike = nil
+        swingTracker.reset()
         speak("Ready. Take your shot.")
     }
 
@@ -265,8 +277,9 @@ final class AppModel {
         capture.testStrike()
     }
 
-    private func impactDetected() {
+    private func impactDetected(at time: Double, manual: Bool) {
         guard phase == .armed else { return }
+        lastStrike = (time, manual)
         phase = .processing
         statusMessage = "Shot captured. Measuring…"
         haptics.confirm()
@@ -280,15 +293,48 @@ final class AppModel {
             phase = .armed
             arm()
         case .success(let clip):
+            // Was the strike the golfer's own swing? Decided now, once pose frames after the sound are in.
+            if let strike = lastStrike,
+               strikeGate.decide(impactTime: strike.time, tracker: swingTracker, manual: strike.manual) == .reject {
+                try? FileManager.default.removeItem(at: clip.url)
+                speak("That strike was not your swing. Still ready.", interrupt: true)
+                arm()
+                return
+            }
             store.recordShotTaken()
             analyze(clip)
         }
+    }
+
+    // MARK: Swing check (SPEC §9.5)
+
+    private func poseReceived(_ p: BodyPose) {
+        guard phase == .armed || phase == .processing else { return }
+        let status = p.isFullBody ? "Swing check: I can see you." : "Swing check: step fully into view."
+        if status != swingCheckStatus { swingCheckStatus = status } // ~30 poses a second; update only on change
+        for event in swingTracker.ingest(p) {
+            guard case .swingCompleted(let swing) = event, phase == .armed else { continue }
+            // A full swing with no strike sound is a practice swing; give tempo feedback and stay ready.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { [weak self] in
+                guard let self, self.phase == .armed,
+                      self.lastStrike.map({ abs($0.time - swing.impactTime) > 1 }) ?? true else { return }
+                let feedback = Readout.tempo(self.tempoCoach.record(swing.tempo)).map { " " + $0 } ?? ""
+                self.speak("Practice swing.\(feedback)")
+            }
+        }
+    }
+
+    /// Tempo of the swing that made this strike, if the swing check saw it.
+    private func swingTempo(forStrikeAt time: Double?) -> Double? {
+        guard let time, let s = swingTracker.lastSwing, abs(s.impactTime - time) < 0.5 else { return nil }
+        return s.tempo
     }
 
     // MARK: Analysis (Phases 1.3 – 2)
 
     private func analyze(_ clip: CapturedClip) {
         guard let cal = calibration else { return }
+        let strikeTime = lastStrike?.time
         let profile = profile
         let club = club
         let ballistics = gate.isEnabled(.ballisticEstimation)
@@ -312,6 +358,9 @@ final class AppModel {
                                       landing: a.landing, clipFileName: clip.url.lastPathComponent, club: club,
                                       clipImpactTime: clip.impactTime, clipFrameRate: clip.frameRate,
                                       bagClub: bagClub, holeNumber: round.state?.currentHole)
+                var withTempo = shot
+                withTempo.swingTempo = swingTempo(forStrikeAt: strikeTime)
+                let shot = withTempo
                 store.add(shot)
                 round.record(shot: shot)
                 round.learn(from: store.shots)
@@ -331,6 +380,7 @@ final class AppModel {
         var text = shot.isSimulated == true ? "Simulated shot. " : ""
         if let launch = shot.launch {
             text += Readout.shotSummary(launch: launch, landing: shot.landing)
+            if let tempo = shot.swingTempo, let said = Readout.tempo(tempoCoach.record(tempo)) { text += " " + said }
             if shot.landing == nil, !gate.isEnabled(.ballisticEstimation) { text += " Unlock Pro to estimate where the ball landed." }
         } else {
             text += a?.failureReason ?? "The shot could not be measured."
@@ -580,7 +630,10 @@ final class AppModel {
     }
 
     private func wireCallbacks() {
-        capture.onImpact = { [weak self] in self?.impactDetected() }
+        capture.onImpact = { [weak self] time, manual in self?.impactDetected(at: time, manual: manual) }
+        let pose = self.pose // called on the video queue: capture the service, not the main-actor model
+        capture.onPoseFrame = { pixels, time in pose.process(pixels, time: time) }
+        pose.onPose = { [weak self] in self?.poseReceived($0) }
         capture.onClip = { [weak self] in self?.clipReady($0) }
         scanner.onDetection = { [weak self] in self?.groundDetection($0) }
         scanner.onHighlight = { [weak self] in self?.highlightImage = $0 }

@@ -391,6 +391,8 @@ public struct ShotRecord: Codable, Identifiable, Equatable, Sendable {
     public var foundLocation: GeoCoordinate?
     /// The golfer took a penalty drop because the ball was predicted to land in water (0.14.0).
     public var droppedFromWater: Bool?
+    /// Backswing-to-downswing time ratio from the swing check (0.15.0), when the camera saw the swing.
+    public var swingTempo: Double?
 
     /// Predicted to land in water: the app offers a drop instead of walking guidance.
     public var landsInWater: Bool { landing?.landingSurface == .water }

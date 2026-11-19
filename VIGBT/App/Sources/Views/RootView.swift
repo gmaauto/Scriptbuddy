@@ -196,6 +196,11 @@ struct ArmedView: View {
             Text("Listening for the strike. Take your shot.")
                 .font(.title2)
                 .multilineTextAlignment(.center)
+            // Swing check (SPEC §9.5): strikes are matched to the golfer's own swing when the camera sees them.
+            Text(model.swingCheckStatus)
+                .font(.title3)
+                .multilineTextAlignment(.center)
+                .accessibilityAddTraits(.updatesFrequently)
             if model.storeService.tier == .free {
                 Text("\(model.shotsLeftToday) free shots left today").font(.headline)
             }
