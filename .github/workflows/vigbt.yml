@@ -83,6 +83,34 @@ jobs:
           grep -E "error:" device-build.log | sort -u | head -200
           tail -3 device-build.log
           exit $status
+      # Field-test .ipa for installing from Windows with AltStore or Sideloadly (docs/device-testing.md).
+      # Unsigned: the sideloading tool signs it with the tester's own Apple ID. Pro is unlocked in this build
+      # only (VIGBT_FIELD_TEST), because local StoreKit testing works only when the app is run from Xcode.
+      - name: Build field-test .ipa (unsigned, for sideloading)
+        run: |
+          set +e
+          xcodebuild -project VIGBT.xcodeproj -scheme "VIGBT Device" -configuration Release \
+            -destination 'generic/platform=iOS' -derivedDataPath fieldtest \
+            CODE_SIGNING_ALLOWED=NO SWIFT_ACTIVE_COMPILATION_CONDITIONS=VIGBT_FIELD_TEST \
+            build > fieldtest-build.log 2>&1
+          status=$?
+          grep -E "error:" fieldtest-build.log | sort -u | head -200
+          tail -3 fieldtest-build.log
+          [ $status -eq 0 ] || exit $status
+          set -e
+          version=$(tr -d '[:space:]' < ../VERSION)
+          rm -rf Payload && mkdir Payload
+          cp -R fieldtest/Build/Products/Release-iphoneos/VIGBT.app Payload/
+          zip -qry "VIGBT-${version}-fieldtest.ipa" Payload
+          ls -lh "VIGBT-${version}-fieldtest.ipa"
+          echo "IPA_NAME=VIGBT-${version}-fieldtest" >> "$GITHUB_ENV"
+      - name: Upload field-test .ipa
+        uses: actions/upload-artifact@v5
+        with:
+          name: ${{ env.IPA_NAME }}
+          path: VIGBT/App/*-fieldtest.ipa
+          if-no-files-found: error
+          retention-days: 30
       - name: Keep build logs
         if: always()
         uses: actions/upload-artifact@v5

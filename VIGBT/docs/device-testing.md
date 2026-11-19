@@ -1,6 +1,6 @@
 # Testing VIGBT on an iPhone
 
-VIGBT version 0.16.0. This is the first time the app runs on real hardware, so expect rough edges. Note
+VIGBT version 0.17.0. This is the first time the app runs on real hardware, so expect rough edges. Note
 anything that fails or feels wrong; the results table at the end says what to send back.
 
 ## What you need
@@ -13,7 +13,7 @@ anything that fails or feels wrong; the results table at the end says what to se
 - **A USB cable**. Wi-Fi works after the first run.
 - **Safety:** for the outdoor tests, use a driving range or an empty field, with a sighted helper.
 
-## One-time setup
+## With a Mac: one-time setup
 
 1. **Get the code:**
    ```
@@ -40,7 +40,7 @@ anything that fails or feels wrong; the results table at the end says what to se
    - Turn on **Settings → Privacy & Security → Developer Mode**. The phone restarts.
    - Plug the phone into the Mac and tap **Trust**.
 
-## Running it
+## With a Mac: running it
 
 1. At the top of Xcode, choose the **VIGBT Device** scheme and your iPhone.
    - That scheme is a Release build, so ball tracking runs at full speed.
@@ -54,6 +54,61 @@ anything that fails or feels wrong; the results table at the end says what to se
 
 **Purchases:** the device scheme uses the local StoreKit test file. "VIGBT Pro" can be bought for free in
 testing, and nothing is charged. Reset purchases in **Debug → StoreKit → Manage Transactions**.
+
+## Installing from Windows (no Mac)
+
+GitHub's Macs build the app on every push. Each run includes a **field-test `.ipa`** that you install with
+your own Apple ID.
+
+**About the field-test build:**
+- **Pro is unlocked** (landing zone, walking guidance, unlimited shots), because test purchases only work
+  when the app runs from Xcode. Settings shows "Field test build: Pro features are unlocked for testing".
+- **It is unsigned.** The installing tool signs it with your Apple ID.
+- **It expires after 7 days** with a free Apple ID, after which it won't open until refreshed. This is an
+  Apple rule.
+
+### 1. Download the .ipa
+
+1. Sign in to GitHub. Downloads need an account, even for a public repository.
+2. Go to https://github.com/gmaauto/Scriptbuddy/actions and open the newest green **VIGBT CI** run.
+3. Under **Artifacts**, download **VIGBT-x.y.z-fieldtest**. GitHub delivers it as a `.zip`; extract it to
+   get `VIGBT-x.y.z-fieldtest.ipa`.
+
+### 2. Install it: AltStore (open source; recommended)
+
+1. **Install Apple's iTunes and iCloud for Windows from apple.com**, not the Microsoft Store versions.
+   AltServer needs the apple.com versions.
+2. Install **AltServer for Windows** from https://altstore.io and start it. It runs as an icon in the
+   system tray.
+3. Plug in the iPhone, unlock it and tap **Trust**. In iTunes, select the phone and tick
+   **Sync with this iPhone over Wi-Fi**. That lets the app be refreshed later without the cable.
+4. Click the AltServer tray icon, choose **Install AltStore → your iPhone**, and sign in with your Apple ID.
+5. On the iPhone, go to **Settings → General → VPN & Device Management**, choose your Apple ID, and tap
+   **Trust**.
+6. On the iPhone, turn on **Settings → Privacy & Security → Developer Mode**. The phone restarts.
+7. Install VIGBT: **hold Shift and click** the AltServer tray icon, choose **Sideload .ipa…**, then pick
+   the VIGBT `.ipa`. Alternatively, copy the `.ipa` to the phone (for example through iCloud Drive) and use
+   AltStore → **My Apps → +**.
+8. **Every 7 days:** open AltStore → **My Apps → Refresh All** while the PC is on the same Wi-Fi with
+   AltServer running.
+
+### Or: Sideloadly (free, closed source)
+
+1. Install iTunes and iCloud from apple.com, as for AltStore.
+2. Install Sideloadly from https://sideloadly.io.
+3. Plug in the iPhone and drag the `.ipa` onto Sideloadly.
+4. Enter your Apple ID and click **Start**.
+5. Then trust your Apple ID and turn on Developer Mode, as in steps 5 and 6 above.
+
+### Good to know
+
+- **Use a spare Apple ID if you can.** These tools sign in to Apple with your Apple ID. A free account can
+  have 3 sideloaded apps at a time; AltStore counts as one.
+- **New version:** download the newer `.ipa` and install it the same way. Shot history is kept.
+- **No live console:** without Xcode you can't watch the app's log. Crash reports are still saved on the
+  phone: **Settings → Privacy & Security → Analytics & Improvements → Analytics Data**, entries starting
+  with "VIGBT". Open one and use Share to send it.
+- **Pick a stable bundle ID** if Sideloadly asks. AltStore adds your team ID to `com.vigbt.app` automatically.
 
 ## Test plan
 

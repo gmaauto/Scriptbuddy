@@ -28,8 +28,8 @@ targets:
     settings:
       base:
         PRODUCT_NAME: VIGBT
-        MARKETING_VERSION: "0.16.0"
-        CURRENT_PROJECT_VERSION: "24"
+        MARKETING_VERSION: "0.17.0"
+        CURRENT_PROJECT_VERSION: "25"
         SWIFT_VERSION: "5.9"
         TARGETED_DEVICE_FAMILY: "1"
         INFOPLIST_KEY_CFBundleDisplayName: VIGBT

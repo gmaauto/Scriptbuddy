@@ -8,7 +8,16 @@ import VIGBTCore
 @MainActor
 @Observable
 final class StoreService {
-    private(set) var tier: EntitlementTier = .free
+    /// True only in the field-test build that CI packages for sideloading (`VIGBT_FIELD_TEST`, see
+    /// docs/device-testing.md). That build has Pro unlocked because local StoreKit testing only works when
+    /// the app is run from Xcode. App Store and Xcode builds never set the flag.
+    #if VIGBT_FIELD_TEST
+    static let isFieldTestBuild = true
+    #else
+    static let isFieldTestBuild = false
+    #endif
+
+    private(set) var tier: EntitlementTier = StoreService.isFieldTestBuild ? .pro : .free
     private(set) var product: Product?
     private(set) var isPurchasing = false
     private(set) var lastError: String?
@@ -41,7 +50,7 @@ final class StoreService {
                 pro = true
             }
         }
-        tier = pro ? .pro : .free
+        tier = pro || Self.isFieldTestBuild ? .pro : .free
     }
 
     func purchase() async {

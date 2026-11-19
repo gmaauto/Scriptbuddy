@@ -189,6 +189,10 @@ struct DisplaySettingsView: View {
                 }
                 Section {
                     Text("Version \(VIGBTVersion.string) (\(VIGBTVersion.build))")
+                    if StoreService.isFieldTestBuild {
+                        Text("Field test build: Pro features are unlocked for testing. Not for sale.")
+                            .bold()
+                    }
                     Text("Open source under the Apache License 2.0. Course data © OpenStreetMap contributors (ODbL).")
                         .font(.footnote)
                 }

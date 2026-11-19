@@ -6,6 +6,17 @@ All notable changes to VIGBT are recorded here. The format follows
 
 Versions before 1.0.0 are development builds that have not yet been compiled or tested on a device.
 
+## [0.17.0] - 2026-11-19
+
+### Added
+- Install on an iPhone from Windows, without a Mac:
+  - CI builds an unsigned **field-test `.ipa`** (artifact `VIGBT-x.y.z-fieldtest`, kept 30 days), to be installed with AltStore or Sideloadly using your own Apple ID;
+  - `docs/device-testing.md` gains step-by-step Windows instructions, including the 7-day refresh and how to send crash reports without Xcode.
+- The `VIGBT_FIELD_TEST` compile flag, set only for that build:
+  - Pro is unlocked, because local StoreKit testing works only from Xcode;
+  - Settings shows "Field test build: Pro features are unlocked for testing. Not for sale.";
+  - App Store and Xcode builds never set it.
+
 ## [0.16.0] - 2026-11-19
 
 ### Added
