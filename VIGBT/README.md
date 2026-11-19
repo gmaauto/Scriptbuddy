@@ -28,9 +28,15 @@ brew install xcodegen
 cd VIGBT/App && xcodegen && open VIGBT.xcodeproj
 ```
 
-Run it on a LiDAR iPhone (12 Pro or newer Pro model); the simulator has no camera or LiDAR. Set your
-development team under Signing & Capabilities. `VIGBT.storekit` is wired into the scheme, so the Pro
-purchase can be tested locally. See SPEC.md §7 for what each file does.
+- **Simulator and SwiftUI previews:** use the **VIGBT** scheme (Debug). The Simulator has no camera or
+  LiDAR, so use **Simulated shot**.
+- **iPhone:** you need a LiDAR iPhone (12 Pro or a newer Pro model). Use the **VIGBT Device** scheme
+  (Release, so image processing runs at full speed). Put your team ID and a unique bundle ID in
+  `App/Config/Local.xcconfig`, starting from `Local.xcconfig.example`; that file is git-ignored.
+  `docs/device-testing.md` has the full setup and the test plan.
+- **Purchases:** `VIGBT.storekit` is wired into both schemes, so the Pro purchase can be tested locally.
+
+See SPEC.md §7 for what each file does.
 
 ## Versioning
 

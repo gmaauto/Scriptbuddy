@@ -6,6 +6,18 @@ All notable changes to VIGBT are recorded here. The format follows
 
 Versions before 1.0.0 are development builds that have not yet been compiled or tested on a device.
 
+## [0.16.0] - 2026-11-19
+
+### Added
+- iPhone testing:
+  - `docs/device-testing.md`: setup with a free Apple ID, running on a LiDAR iPhone, a staged test plan (indoors, range, course) and a results table to send back;
+  - a **VIGBT Device** scheme: a Release build with the debugger attached, so image processing runs at full speed on the phone;
+  - local signing: `App/Config/Signing.xcconfig` includes your own git-ignored `Local.xcconfig` (team ID and a unique bundle ID). Start from `Local.xcconfig.example`.
+
+### Changed
+- Debug builds are unoptimised (`-Onone`), so SwiftUI previews work in Xcode. The old app-level `-O` never applied to VIGBTCore's pixel loops anyway, because the package builds with its own configuration; the Release scheme covers speed.
+- CI also builds the Release "VIGBT Device" scheme, and uses `actions/checkout@v5` and `actions/upload-artifact@v5` (Node 24).
+
 ## [0.15.2] - 2026-11-19
 
 ### Fixed

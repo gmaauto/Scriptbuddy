@@ -1,0 +1,8 @@
+// Copy this file to Local.xcconfig (same folder). Local.xcconfig is git-ignored, so your team ID stays private.
+//
+// DEVELOPMENT_TEAM: your 10-character Apple team ID. In Xcode: Settings > Accounts > your Apple ID >
+// the team, or developer.apple.com > Membership. A free Apple ID ("Personal Team") works for your own iPhone.
+DEVELOPMENT_TEAM = ABCDE12345
+
+// A free Personal Team needs a bundle ID nobody else has used. Make it yours, e.g. with your initials.
+PRODUCT_BUNDLE_IDENTIFIER = com.example.yourname.vigbt

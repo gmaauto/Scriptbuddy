@@ -5,3 +5,4 @@ DerivedData/
 App/VIGBT.xcodeproj/
 App/Sources/Info.plist
 __pycache__/
+App/Config/Local.xcconfig

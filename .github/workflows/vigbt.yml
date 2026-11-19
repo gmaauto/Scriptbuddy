@@ -20,7 +20,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - run: VIGBT/tools/check_version.sh
 
   linux:
@@ -32,7 +32,7 @@ jobs:
       run:
         working-directory: VIGBT
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - run: swift build
       - run: swift test
       - name: Monte Carlo validation (SPEC §12)
@@ -46,7 +46,7 @@ jobs:
       run:
         working-directory: VIGBT
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - run: xcodebuild -version && swift --version
       - run: swift test
 
@@ -58,7 +58,7 @@ jobs:
       run:
         working-directory: VIGBT/App
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - run: xcodebuild -version
       - run: brew install xcodegen
       - run: xcodegen generate
@@ -73,10 +73,10 @@ jobs:
           grep -E "error:|warning: .*VIGBT/App" simulator-build.log | sort -u | head -200
           tail -3 simulator-build.log
           exit $status
-      - name: Build for iPhone (unsigned)
+      - name: Build for iPhone, Release (the "VIGBT Device" scheme, unsigned)
         run: |
           set +e
-          xcodebuild -project VIGBT.xcodeproj -scheme VIGBT \
+          xcodebuild -project VIGBT.xcodeproj -scheme "VIGBT Device" -configuration Release \
             -destination 'generic/platform=iOS' \
             CODE_SIGNING_ALLOWED=NO build > device-build.log 2>&1
           status=$?
@@ -85,7 +85,7 @@ jobs:
           exit $status
       - name: Keep build logs
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: ios-build-logs
           path: VIGBT/App/*-build.log

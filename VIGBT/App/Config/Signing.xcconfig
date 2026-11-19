@@ -1,0 +1,7 @@
+// Signing and bundle ID for VIGBT. Do not put your Apple team ID here: this file is committed.
+// Copy Local.xcconfig.example to Local.xcconfig (git-ignored) and fill in your own values.
+
+PRODUCT_BUNDLE_IDENTIFIER = com.vigbt.app
+CODE_SIGN_STYLE = Automatic
+
+#include? "Local.xcconfig"

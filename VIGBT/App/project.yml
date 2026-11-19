@@ -1,7 +1,6 @@
 # Generate the Xcode project with XcodeGen:  brew install xcodegen && cd VIGBT/App && xcodegen
 name: VIGBT
 options:
-  bundleIdPrefix: com.vigbt
   deploymentTarget:
     iOS: "17.0"
   createIntermediateGroups: true
@@ -21,16 +20,26 @@ targets:
     dependencies:
       - package: VIGBTCore
         product: VIGBTCore
+    # Bundle ID and signing team come from Config/Signing.xcconfig, which includes your own
+    # Config/Local.xcconfig (git-ignored) when it exists. See docs/device-testing.md.
+    configFiles:
+      Debug: Config/Signing.xcconfig
+      Release: Config/Signing.xcconfig
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.vigbt.app
         PRODUCT_NAME: VIGBT
-        MARKETING_VERSION: "0.15.2"
-        CURRENT_PROJECT_VERSION: "23"
+        MARKETING_VERSION: "0.16.0"
+        CURRENT_PROJECT_VERSION: "24"
         SWIFT_VERSION: "5.9"
         TARGETED_DEVICE_FAMILY: "1"
         INFOPLIST_KEY_CFBundleDisplayName: VIGBT
-        SWIFT_OPTIMIZATION_LEVEL: "-O"   # pixel loops are ~20x slower unoptimised; keep -O even in Debug
+      configs:
+        # Debug: unoptimised, so SwiftUI previews work in Xcode. Pixel loops are about 20x slower, which
+        # is fine in the Simulator; on an iPhone use the "VIGBT Device" scheme (Release) for real speed.
+        Debug:
+          SWIFT_OPTIMIZATION_LEVEL: "-Onone"
+        Release:
+          SWIFT_OPTIMIZATION_LEVEL: "-O"
     info:
       path: Sources/Info.plist
       properties:
@@ -46,12 +55,24 @@ targets:
         UIBackgroundModes: [audio, location]
 
 schemes:
+  # Simulator and SwiftUI previews (Debug, unoptimised).
   VIGBT:
     build:
       targets:
         VIGBT: all
     run:
       config: Debug
+      storeKitConfiguration: Resources/VIGBT.storekit
+    archive:
+      config: Release
+  # Testing on an iPhone: Release build, so VIGBTCore's pixel loops run at full speed at 120 fps.
+  # The debugger still attaches; StoreKit uses the local test configuration (no real purchases).
+  VIGBT Device:
+    build:
+      targets:
+        VIGBT: all
+    run:
+      config: Release
       storeKitConfiguration: Resources/VIGBT.storekit
     archive:
       config: Release
