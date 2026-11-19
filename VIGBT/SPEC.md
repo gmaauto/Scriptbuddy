@@ -1,9 +1,10 @@
 # Vision Impaired Golf Ball Tracker (VIGBT) — Master Technical & Commercial Specification
 
-Document version: 0.14.0 · Updated 2026-11-19 · Status: draft (not yet compiled or tested on a device)
+Document version: 0.14.1 · Updated 2026-11-19 · Status: draft (not yet compiled or tested on a device)
 
 | Version | Date | Changes |
 |---|---|---|
+| 0.14.1 | 2026-11-19 | Homing screen approved on re-review; all 16 screens approved |
 | 0.14.0 | 2026-11-19 | §12.8 water: warning spoken first, "Drop a ball" replaces walking guidance (replay review) |
 | 0.13.3 | 2026-11-17 | Walk screen approved (re-review); replay mockup shows the full spoken readout |
 | 0.13.2 | 2026-11-17 | Walk screen says "yards to the search zone" on screen and in speech, matching the reviewed design |

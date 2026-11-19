@@ -6,6 +6,11 @@ All notable changes to VIGBT are recorded here. The format follows
 
 Versions before 1.0.0 are development builds that have not yet been compiled or tested on a device.
 
+## [0.14.1] - 2026-11-19
+
+### Design
+- Homing screen (guided search) approved on re-review. All 16 screens are approved (`design/approvals.md`).
+
 ## [0.14.0] - 2026-11-19
 
 ### Added
